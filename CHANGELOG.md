@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- GitHub Actions CI workflow added
+- Added GitHub Actions CI workflow
 
 ### Changed
 - Normalized Unicode dashes in documentation
