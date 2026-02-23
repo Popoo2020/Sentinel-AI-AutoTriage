@@ -3,12 +3,12 @@
 **Enterprise‑grade SOC automation framework for Microsoft Sentinel**
 
 ## 🌐 Overview
-Sentinel‑AI‑AutoTriage connects to Microsoft Sentinel, ingests Tier‑1 incidents and uses a large‑language model (LLM) to analyse and enrich the context of each incident. When appropriate, it automatically closes incidents and adds detailed comments and classifications. Automation rules in Microsoft Sentinel can triage incidents by changing status, assigning an owner, tagging, escalating and closing incidents【935991109219243†L219-L241】; this project extends those capabilities with AI‑driven reasoning.
+Sentinel‑AI‑AutoTriage connects to Microsoft Sentinel, ingests Tier‑1 incidents and uses a large‑language model (LLM) to analyse and enrich the context of each incident. When appropriate, it automatically closes incidents and adds detailed comments and classifications. Automation rules in Microsoft Sentinel can triage incidents by changing status, assigning an owner, tagging, escalating and closing incidents; this project extends those capabilities with AI‑driven reasoning.
 
 ## 📦 Features
 
 * **Secure Authentication:** Uses `azure-identity` to obtain tokens via `DefaultAzureCredential`, which automatically chooses the right authentication mechanism for the environment【987667603810256†L350-L364】. Service principal credentials (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`) are read from environment variables【987667603810256†L428-L433】.
-* **Incident Ingestion:** Leverages `azure-mgmt-securityinsight` to list and fetch active incidents from Microsoft Sentinel. The library exposes `IncidentsOperations` and `AutomationRulesOperations` endpoints for managing incidents【293495716091909†L337-L431】.
+* **Incident Ingestion:** Leverages `azure-mgmt-securityinsight` to list and fetch active incidents from Microsoft Sentinel. The library exposes `IncidentsOperations` and `AutomationRulesOperations` endpoints for managing incidents.
 * **LLM‑based Analysis:** Sends incident summaries to an LLM (OpenAI API or local model via LangChain). The model returns suggested severity, recommended actions and resolution status.
 * **Auto‑Close Workflow:** If the LLM categorises an incident as benign or resolved, the framework updates the incident’s status to “Closed” and adds a comment explaining why. This minimises analyst fatigue and ensures repeatable triage.
 * **Logging & Observability:** Comprehensive logging using the Python `logging` module. Every API call, decision and error is recorded, enabling full auditability.
