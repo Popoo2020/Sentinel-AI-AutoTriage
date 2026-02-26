@@ -5,7 +5,7 @@
 ### Added
 - Added GitHub Actions CI workflow
 - Minimal smoke tests to improve CI stability
--UUnit test for IncidentSummary.as_prompt
+- Unit test for IncidentSummary.as_prompt
 
 
 
