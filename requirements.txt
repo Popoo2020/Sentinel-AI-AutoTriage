@@ -4,3 +4,6 @@ python-dotenv>=1.0.0
 openai>=1.0.0
 langchain>=0.0.350  # optional: used if you choose LangChain instead of direct OpenAI calls
 rich>=13.5.0  # optional: pretty logging
+azure-core>=1.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
+requests>=2.32.4 # not directly required, pinned by Snyk to avoid a vulnerability
+urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
