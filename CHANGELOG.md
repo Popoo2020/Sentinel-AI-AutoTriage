@@ -12,3 +12,4 @@
 ### Changed
 - Normalized Unicode dashes in documentation
 - CI now fails on test errors
+-  CI now installs pytest for unit tests
