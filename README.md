@@ -1,76 +1,86 @@
 # Sentinel‑AI‑AutoTriage
 
-**Enterprise‑grade SOC automation framework for Microsoft Sentinel**
+[![CI](https://github.com/your-org/Sentinel-AI-AutoTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/Sentinel-AI-AutoTriage/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 🌐 Overview
-Sentinel‑AI‑AutoTriage connects to Microsoft Sentinel, ingests Tier‑1 incidents and uses a large‑language model (LLM) to analyse and enrich the context of each incident. When appropriate, it automatically closes incidents and adds detailed comments and classifications. Automation rules in Microsoft Sentinel can triage incidents by changing status, assigning an owner, tagging, escalating and closing incidents; this project extends those capabilities with AI‑driven reasoning.
+**Sentinel‑AI‑AutoTriage** is a proof‑of‑concept for automating security
+incident triage in Microsoft Sentinel using large language models (LLMs).
+The goal is to reduce analyst toil by parsing alerts, extracting key
+context, applying scoring rubrics and recommending next actions.  This
+repository contains Python scaffolding, a hardened CI pipeline and a
+framework for adding parsers, scoring logic and integrations.
 
-## 📦 Features
+## Features
 
-* **Secure Authentication:** Uses `azure-identity` to obtain tokens via `DefaultAzureCredential`, which automatically chooses the right authentication mechanism for the environment【987667603810256†L350-L364】. Service principal credentials (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`) are read from environment variables【987667603810256†L428-L433】.
-* **Incident Ingestion:** Leverages `azure-mgmt-securityinsight` to list and fetch active incidents from Microsoft Sentinel. The library exposes `IncidentsOperations` and `AutomationRulesOperations` endpoints for managing incidents.
-* **LLM‑based Analysis:** Sends incident summaries to an LLM (OpenAI API or local model via LangChain). The model returns suggested severity, recommended actions and resolution status.
-* **Auto‑Close Workflow:** If the LLM categorises an incident as benign or resolved, the framework updates the incident’s status to “Closed” and adds a comment explaining why. This minimises analyst fatigue and ensures repeatable triage.
-* **Logging & Observability:** Comprehensive logging using the Python `logging` module. Every API call, decision and error is recorded, enabling full auditability.
-* **Extensible:** Modular functions allow integration with other ticketing or SIEM platforms. The LLM component is abstracted to enable plug‑in of different models.
+* **Flexible parsing:** The `src/` package (not yet included) is intended
+  to house parsers that normalise diverse Sentinel alert formats into a
+  consistent schema for analysis.
+* **LLM integration:** Future modules will call a generative model to
+  summarise incident context and recommend severity scores and confidence
+  levels based on a rubric.
+* **Scoring framework:** Plans include a scoring rubric that maps
+  alert features to severity and confidence ratings, with configurable
+  decision thresholds for auto‑closure or escalation.
+* **Structured logging:** The project is designed to emit JSON‑formatted
+  logs with correlation IDs (e.g. `incident_id`) to aid monitoring and
+  troubleshooting.
+* **Dry‑run mode:** Coming functionality will allow testing pipelines
+  without writing back to Sentinel, printing intended updates instead.
 
-## 🛠️ Stack
-| Component | Technology |
-|---|---|
-| **Language** | Python 3.10+ |
-| **Azure SDK** | `azure-identity`, `azure-mgmt-securityinsight` |
-| **AI/LLM** | `openai` or `langchain` for model interfacing |
-| **Others** | `dotenv` for reading `.env` files, `rich` for colourful logging (optional) |
+## Quickstart
 
-## 🚀 Getting Started
+This project is a starting point and does not yet include a working
+implementation.  To contribute or experiment:
 
-1. **Clone the repository:**
+1. Clone the repository and set up a virtual environment:
+
    ```bash
-   git clone https://github.com/eric-ariel-rimon/Sentinel-AI-AutoTriage.git
-   cd Sentinel-AI-AutoTriage
-   ```
-2. **Install dependencies:**
-   ```bash
+   git clone https://github.com/your‑org/Sentinel‑AI‑AutoTriage.git
+   cd Sentinel‑AI‑AutoTriage
+   python -m venv .venv && source .venv/bin/activate
    pip install -r requirements.txt
    ```
-3. **Configure environment variables:**
-   Create a `.env` file in the project root and populate it with:
-   ```ini
-   AZURE_CLIENT_ID=<your service principal client ID>
-   AZURE_TENANT_ID=<your tenant ID>
-   AZURE_CLIENT_SECRET=<your client secret>
-   SUBSCRIPTION_ID=<Azure subscription ID>
-   RESOURCE_GROUP=<Sentinel resource group>
-   WORKSPACE_NAME=<Sentinel workspace name>
-   OPENAI_API_KEY=<optional – only if using OpenAI API>
-   ```
-4. **Run the auto‑triage script:**
-   ```bash
-   python src/auto_triage.py
-   ```
 
-## 📄 File Structure
+2. Add your parser and scoring logic under the `src/` directory.
+3. Write unit tests under `tests/` to exercise your functions and ensure
+   they handle malformed or incomplete data gracefully.  Example test cases
+   are provided in `tests/test_parser.py` to get you started.
+4. Run the CI workflow locally by executing the commands in
+   `.github/workflows/ci.yml` or push your changes to trigger GitHub
+   Actions.
 
-```
-Sentinel-AI-AutoTriage/
-├── README.md                 # Project overview and instructions
-├── requirements.txt          # Python dependencies
-├── .env.example              # Sample environment variables
-├── src/
-│   ├── __init__.py
-│   ├── auto_triage.py        # Main entry point for the automation
-│   ├── sentinel_client.py    # Wraps Azure SDK calls
-│   ├── llm_client.py         # Abstracts LLM interactions
-│   └── models.py             # Data models and utility functions
-└── logs/                     # Log files generated at runtime
-```
+## CI & Quality
 
-## ✅ Roadmap
+The repository includes a hardened CI pipeline that:
 
-* [x] Implement initial incident ingestion and closing logic.
-* [ ] Integrate sentiment and context analysis for richer enrichment.
-* [ ] Add support for additional SIEMs (Splunk, ELK).
-* [ ] Create a dashboard to visualise triage outcomes.
+* Installs dependencies while upgrading `pip` and tolerates optional
+  installation failures (e.g. optional GPU packages).
+* Runs `pytest` only when tests exist and skips gracefully otherwise.
+* Provides a pre‑commit configuration (`.pre-commit-config.yaml`) that
+  installs code formatters (`black`, `ruff`) and can be run via `pre‑commit
+  run --all-files`.
 
-## 📄 License
-This project is released under the MIT License. See `LICENSE` for more information.
+See `CHANGELOG.md` for a detailed history of improvements.
+
+## Roadmap
+
+1. Implement threat modelling for the auto‑triage pipeline, including data
+   flow, trust boundaries and abuse cases (e.g. prompt injection).
+2. Develop the scoring rubric and integrate an LLM for summarisation.
+3. Add retry logic and rate limiting to safely handle API calls.
+4. Introduce a sanitisation layer that redacts sensitive data before
+   sending it to the LLM.
+5. Build a dry‑run mode and configuration validation.
+
+Your contributions are welcome!  Refer to `CONTRIBUTING.md` for
+instructions on opening issues and submitting pull requests.
+
+## Known Limitations
+
+At present, this repository contains scaffolding rather than a full
+implementation.  There are no production‑ready parsers or scoring
+algorithms, and LLM integration is not yet implemented.  The hardened CI
+pipeline will skip tests if none are present, but you must write your own
+tests to ensure quality.  Use this project as a foundation and do not
+deploy it to handle live incidents without significant development and
+validation.

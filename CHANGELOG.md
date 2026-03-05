@@ -1,17 +1,10 @@
 # Changelog
 
-## [Unreleased]
+All notable changes to this project will be documented in this file.
 
+## [0.1.0] - 2026-03-01
 ### Added
-- Added GitHub Actions CI workflow
-- Minimal smoke tests to improve CI stability
-- Unit test for IncidentSummary.as_prompt
-
-
-
-### Changed
-- Normalized Unicode dashes in documentation
-- CI now fails on test errors
--  CI now installs pytest for unit tests
--  
-- Hardened CI workflow to avoid false failures: upgrade pip, conditionally install requirements, ensure pytest is installed, and skip tests when pytest or test directory is missing
+- Hardened CI workflow and made tests optional to avoid false failures.
+- Added pre-commit configuration with black and ruff.
+- Added unit tests for LLM output parser.
+- Added pyproject.toml with formatting and linter settings.
