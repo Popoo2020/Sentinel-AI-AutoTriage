@@ -9,6 +9,8 @@ It retrieves active incidents, prepares structured incident context, invokes an 
 > **Status:** functional prototype / active hardening.  
 > The project is suitable for demos, architecture discussion, and further development — not for unattended production incident closure.
 
+![Sentinel-AI-AutoTriage architecture](assets/sentinel-auto-triage-architecture.svg)
+
 ## What is implemented
 
 | Capability | Status |
@@ -78,7 +80,7 @@ OPENAI_API_KEY=
 Optional variables:
 
 ```bash
-LLM_MODEL=gpt-4
+LLM_MODEL=gpt-4o-mini
 AUTO_APPLY_CHANGES=false
 ```
 
@@ -113,7 +115,16 @@ The analysis layer expects a JSON object shaped like:
 2. Add confidence scoring and rule-based preconditions before any write action
 3. Introduce analyst approval workflow for closure decisions
 4. Add richer automated tests for parsing, malformed model output and update logic
-5. Replace legacy provider-specific calls with a modern provider adapter pattern
+5. Add provider adapters and a model-agnostic inference interface
+
+## Release readiness
+
+A sensible first tagged release would be **`v0.1.0`** once the following are verified in GitHub Actions:
+
+- CI passes on `main`
+- the README examples remain accurate
+- dry-run execution is the documented default
+- any optional write-action path remains explicitly gated
 
 ## Known limitations
 
