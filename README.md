@@ -1,86 +1,123 @@
-# Sentinel‑AI‑AutoTriage
+# Sentinel-AI-AutoTriage
 
-[![CI](https://github.com/your-org/Sentinel-AI-AutoTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/Sentinel-AI-AutoTriage/actions/workflows/ci.yml)
+[![CI](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Sentinel‑AI‑AutoTriage** is a proof‑of‑concept for automating security
-incident triage in Microsoft Sentinel using large language models (LLMs).
-The goal is to reduce analyst toil by parsing alerts, extracting key
-context, applying scoring rubrics and recommending next actions.  This
-repository contains Python scaffolding, a hardened CI pipeline and a
-framework for adding parsers, scoring logic and integrations.
+**Sentinel-AI-AutoTriage** is an LLM-assisted Microsoft Sentinel triage framework for controlled SOC automation experiments.  
+It retrieves active incidents, prepares structured incident context, invokes an LLM analysis layer, and supports safe response workflow development with explicit guardrails around write actions.
+
+> **Status:** functional prototype / active hardening.  
+> The project is suitable for demos, architecture discussion, and further development — not for unattended production incident closure.
+
+## What is implemented
+
+| Capability | Status |
+|---|---|
+| Azure Sentinel incident retrieval | ✅ Implemented |
+| Environment-based configuration | ✅ Implemented |
+| LLM client abstraction | ✅ Implemented |
+| Structured JSON-first LLM parsing with safe fallback | ✅ Implemented |
+| Incident status recommendation handling | ✅ Implemented |
+| Write-action gate via `AUTO_APPLY_CHANGES` | ✅ Implemented |
+| Console + file logging | ✅ Implemented |
+| Production-grade validation, evaluation and governance | 🟡 In progress |
+
+## Architecture
+
+```text
+Microsoft Sentinel
+        │
+        ▼
+Incident retrieval
+        │
+        ▼
+Structured incident summary
+        │
+        ▼
+LLM analysis layer
+        │
+        ▼
+Validated recommendation
+        │
+        ├── Dry-run logging (default)
+        └── Optional incident update when explicitly enabled
+```
+
+## Safety posture
+
+The default mode is **non-destructive**:
+
+- `AUTO_APPLY_CHANGES=false` by default
+- incident updates are logged as recommendations unless write mode is explicitly enabled
+- malformed or non-JSON LLM output falls back safely to `Active / Unspecified`
+- the project is designed for controlled, authorised lab or demo use
 
 ## Features
 
-* **Flexible parsing:** The `src/` package (not yet included) is intended
-  to house parsers that normalise diverse Sentinel alert formats into a
-  consistent schema for analysis.
-* **LLM integration:** Future modules will call a generative model to
-  summarise incident context and recommend severity scores and confidence
-  levels based on a rubric.
-* **Scoring framework:** Plans include a scoring rubric that maps
-  alert features to severity and confidence ratings, with configurable
-  decision thresholds for auto‑closure or escalation.
-* **Structured logging:** The project is designed to emit JSON‑formatted
-  logs with correlation IDs (e.g. `incident_id`) to aid monitoring and
-  troubleshooting.
-* **Dry‑run mode:** Coming functionality will allow testing pipelines
-  without writing back to Sentinel, printing intended updates instead.
+- **Sentinel incident triage flow** — fetches active/new incidents and converts them into structured summaries
+- **LLM-assisted analysis** — prompts the model to return JSON with:
+  - `recommended_status`
+  - `classification`
+  - `comment`
+- **Safe parsing layer** — attempts strict JSON extraction first and degrades gracefully on malformed output
+- **Write-action gate** — optional update of incident status/classification/comment only when explicitly enabled
+- **Structured logging** — logs to console and `logs/auto_triage.log`
+- **Extensible design** — can be expanded with confidence scoring, PII redaction, approval workflows, and richer evaluation logic
+
+## Configuration
+
+Required environment variables:
+
+```bash
+SUBSCRIPTION_ID=
+RESOURCE_GROUP=
+WORKSPACE_NAME=
+OPENAI_API_KEY=
+```
+
+Optional variables:
+
+```bash
+LLM_MODEL=gpt-4
+AUTO_APPLY_CHANGES=false
+```
 
 ## Quickstart
 
-This project is a starting point and does not yet include a working
-implementation.  To contribute or experiment:
+```bash
+git clone https://github.com/Popoo2020/Sentinel-AI-AutoTriage.git
+cd Sentinel-AI-AutoTriage
 
-1. Clone the repository and set up a virtual environment:
+python -m venv .venv
+source .venv/bin/activate
 
-   ```bash
-   git clone https://github.com/your‑org/Sentinel‑AI‑AutoTriage.git
-   cd Sentinel‑AI‑AutoTriage
-   python -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+pip install -r requirements.txt
+python -m src.auto_triage
+```
 
-2. Add your parser and scoring logic under the `src/` directory.
-3. Write unit tests under `tests/` to exercise your functions and ensure
-   they handle malformed or incomplete data gracefully.  Example test cases
-   are provided in `tests/test_parser.py` to get you started.
-4. Run the CI workflow locally by executing the commands in
-   `.github/workflows/ci.yml` or push your changes to trigger GitHub
-   Actions.
+## Example LLM response contract
 
-## CI & Quality
+The analysis layer expects a JSON object shaped like:
 
-The repository includes a hardened CI pipeline that:
+```json
+{
+  "recommended_status": "Active",
+  "classification": "True Positive",
+  "comment": "Suspicious repeated authentication failures against a privileged account require analyst review."
+}
+```
 
-* Installs dependencies while upgrading `pip` and tolerates optional
-  installation failures (e.g. optional GPU packages).
-* Runs `pytest` only when tests exist and skips gracefully otherwise.
-* Provides a pre‑commit configuration (`.pre-commit-config.yaml`) that
-  installs code formatters (`black`, `ruff`) and can be run via `pre‑commit
-  run --all-files`.
+## Suggested next hardening steps
 
-See `CHANGELOG.md` for a detailed history of improvements.
+1. Add redaction/sanitisation before data is sent to the LLM
+2. Add confidence scoring and rule-based preconditions before any write action
+3. Introduce analyst approval workflow for closure decisions
+4. Add richer automated tests for parsing, malformed model output and update logic
+5. Replace legacy provider-specific calls with a modern provider adapter pattern
 
-## Roadmap
+## Known limitations
 
-1. Implement threat modelling for the auto‑triage pipeline, including data
-   flow, trust boundaries and abuse cases (e.g. prompt injection).
-2. Develop the scoring rubric and integrate an LLM for summarisation.
-3. Add retry logic and rate limiting to safely handle API calls.
-4. Introduce a sanitisation layer that redacts sensitive data before
-   sending it to the LLM.
-5. Build a dry‑run mode and configuration validation.
-
-Your contributions are welcome!  Refer to `CONTRIBUTING.md` for
-instructions on opening issues and submitting pull requests.
-
-## Known Limitations
-
-At present, this repository contains scaffolding rather than a full
-implementation.  There are no production‑ready parsers or scoring
-algorithms, and LLM integration is not yet implemented.  The hardened CI
-pipeline will skip tests if none are present, but you must write your own
-tests to ensure quality.  Use this project as a foundation and do not
-deploy it to handle live incidents without significant development and
-validation.
+- This is a prototype, not a production SOC platform
+- It does not yet include a benchmark/evaluation suite for triage quality
+- It does not yet implement PII/secret redaction before LLM invocation
+- Automated incident updates should remain disabled unless tested in a controlled environment
