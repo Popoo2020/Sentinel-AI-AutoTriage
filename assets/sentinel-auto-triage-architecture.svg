@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Sentinel AI Auto Triage Architecture</title>
+  <desc id="desc">Architecture flow from Microsoft Sentinel to incident retrieval, LLM analysis, validated recommendation, and dry run or optional write update.</desc>
+  <rect width="1200" height="420" fill="#ffffff"/>
+  <style>
+    .box { fill:#f7f9fc; stroke:#1f2937; stroke-width:2; rx:18; }
+    .title { font: 700 26px Arial, sans-serif; fill:#111827; }
+    .label { font: 700 18px Arial, sans-serif; fill:#111827; }
+    .small { font: 15px Arial, sans-serif; fill:#374151; }
+    .arrow { stroke:#374151; stroke-width:3; fill:none; marker-end:url(#arrow); }
+    .note { fill:#eef6ff; stroke:#2563eb; stroke-width:2; rx:14; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#374151" />
+    </marker>
+  </defs>
+
+  <text x="600" y="42" text-anchor="middle" class="title">Sentinel-AI-AutoTriage — Safe SOC Automation Flow</text>
+
+  <rect x="40" y="120" width="190" height="110" class="box"/>
+  <text x="135" y="158" text-anchor="middle" class="label">Sentinel</text>
+  <text x="135" y="184" text-anchor="middle" class="small">Active / New</text>
+  <text x="135" y="205" text-anchor="middle" class="small">Incidents</text>
+
+  <rect x="270" y="120" width="190" height="110" class="box"/>
+  <text x="365" y="153" text-anchor="middle" class="label">Incident</text>
+  <text x="365" y="177" text-anchor="middle" class="label">Retrieval</text>
+  <text x="365" y="205" text-anchor="middle" class="small">Structured summary</text>
+
+  <rect x="500" y="120" width="190" height="110" class="box"/>
+  <text x="595" y="153" text-anchor="middle" class="label">LLM</text>
+  <text x="595" y="177" text-anchor="middle" class="label">Analysis</text>
+  <text x="595" y="205" text-anchor="middle" class="small">JSON-first output</text>
+
+  <rect x="730" y="120" width="210" height="110" class="box"/>
+  <text x="835" y="153" text-anchor="middle" class="label">Validated</text>
+  <text x="835" y="177" text-anchor="middle" class="label">Recommendation</text>
+  <text x="835" y="205" text-anchor="middle" class="small">Safe fallback logic</text>
+
+  <rect x="980" y="92" width="180" height="80" class="note"/>
+  <text x="1070" y="125" text-anchor="middle" class="label">Dry-run</text>
+  <text x="1070" y="149" text-anchor="middle" class="small">Default mode</text>
+
+  <rect x="980" y="198" width="180" height="80" class="note"/>
+  <text x="1070" y="231" text-anchor="middle" class="label">Write update</text>
+  <text x="1070" y="255" text-anchor="middle" class="small">Explicitly enabled</text>
+
+  <path d="M230 175 H270" class="arrow"/>
+  <path d="M460 175 H500" class="arrow"/>
+  <path d="M690 175 H730" class="arrow"/>
+  <path d="M940 160 C960 160, 960 132, 980 132" class="arrow"/>
+  <path d="M940 190 C960 190, 960 238, 980 238" class="arrow"/>
+
+  <rect x="260" y="300" width="680" height="64" class="note"/>
+  <text x="600" y="326" text-anchor="middle" class="label">Safety controls</text>
+  <text x="600" y="349" text-anchor="middle" class="small">AUTO_APPLY_CHANGES=false by default · malformed LLM output fails safely · analyst-friendly logging</text>
+</svg>
