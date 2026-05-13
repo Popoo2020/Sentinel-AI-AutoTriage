@@ -5,7 +5,7 @@ llm_client.py
 LLM provider wrapper for the Sentinel-AI-AutoTriage prototype.
 
 The module asks the model for a strict JSON response and validates the result
-before the triage layer consumes it.  If the model returns malformed content,
+before the triage layer consumes it. If the model returns malformed content,
 the client degrades safely to a non-destructive recommendation that leaves the
 incident active for analyst review.
 """
@@ -18,9 +18,9 @@ import re
 from typing import Any, Dict
 
 try:
-    import openai  # type: ignore
+    from openai import OpenAI  # type: ignore
 except ImportError:
-    openai = None  # openai is optional
+    OpenAI = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +37,17 @@ _ALLOWED_CLASSIFICATIONS = {
 class LLMClient:
     """Small abstraction for LLM-assisted incident triage recommendations."""
 
-    def __init__(self, model_name: str = "gpt-4", temperature: float = 0.2) -> None:
+    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.2) -> None:
         self.model_name = model_name
         self.temperature = temperature
         api_key = os.getenv("OPENAI_API_KEY")
-        if openai is None:
+        if OpenAI is None:
             raise ImportError(
                 "openai package is not installed. Install openai or implement another provider."
             )
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
-        openai.api_key = api_key
+        self.client = OpenAI(api_key=api_key)
 
     def analyse_incident(self, incident_title: str, incident_description: str) -> Dict[str, str]:
         """Return a validated incident triage recommendation.
@@ -72,13 +72,13 @@ class LLMClient:
         )
 
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.temperature,
                 max_tokens=220,
             )
-            content = response.choices[0].message["content"]  # type: ignore[index]
+            content = response.choices[0].message.content or ""
             return self._parse_response(content)
         except Exception as exc:
             logger.error("Error invoking LLM: %s", exc)
@@ -94,7 +94,6 @@ class LLMClient:
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
-            # Try to recover if the provider wrapped the object in prose/fences.
             match = re.search(r"\{.*\}", content, flags=re.DOTALL)
             if match:
                 try:
