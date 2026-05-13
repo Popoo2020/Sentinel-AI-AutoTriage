@@ -2,16 +2,20 @@
 llm_client.py
 -------------
 
-This module provides an abstraction over different large‑language model providers.
-By default it integrates with the OpenAI API. You can extend or replace this
-implementation to use LangChain or other providers. API keys are read from
-environment variables; no secrets are stored in code.
+LLM provider wrapper for the Sentinel-AI-AutoTriage prototype.
+
+The module asks the model for a strict JSON response and validates the result
+before the triage layer consumes it.  If the model returns malformed content,
+the client degrades safely to a non-destructive recommendation that leaves the
+incident active for analyst review.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
-from typing import Dict, Optional
+import re
+from typing import Any, Dict
 
 try:
     import openai  # type: ignore
@@ -20,9 +24,18 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_ALLOWED_STATUSES = {"New", "Active", "Closed"}
+_ALLOWED_CLASSIFICATIONS = {
+    "True Positive",
+    "False Positive",
+    "Benign Positive",
+    "Undetermined",
+    "Unspecified",
+}
+
 
 class LLMClient:
-    """Simple wrapper for interacting with an LLM service (OpenAI by default)."""
+    """Small abstraction for LLM-assisted incident triage recommendations."""
 
     def __init__(self, model_name: str = "gpt-4", temperature: float = 0.2) -> None:
         self.model_name = model_name
@@ -30,50 +43,94 @@ class LLMClient:
         api_key = os.getenv("OPENAI_API_KEY")
         if openai is None:
             raise ImportError(
-                "openai package is not installed. Install openai or implement a different provider."
+                "openai package is not installed. Install openai or implement another provider."
             )
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         openai.api_key = api_key
 
     def analyse_incident(self, incident_title: str, incident_description: str) -> Dict[str, str]:
-        """Send incident data to the LLM and return structured recommendations.
+        """Return a validated incident triage recommendation.
 
-        The model is prompted to decide whether an incident is benign, false
-        positive or malicious and suggest whether to close it.
-
-        Returns a dictionary with keys: `recommended_status`, `classification`,
-        and `comment`.
+        Expected output schema:
+        {
+          "recommended_status": "New" | "Active" | "Closed",
+          "classification": "True Positive" | "False Positive" | "Benign Positive" | "Undetermined" | "Unspecified",
+          "comment": "short analyst-facing explanation"
+        }
         """
         prompt = (
-            "You are a cybersecurity analyst. A SIEM incident has the following title"
-            f" and description:\nTitle: {incident_title}\nDescription: {incident_description}\n"
-            "Provide a recommended incident status (New, Active or Closed), a brief classification (True Positive, False Positive"
-            ", or Benign) and a one‑sentence comment explaining your decision."
+            "You are assisting a cybersecurity analyst with Microsoft Sentinel incident triage. "
+            "Return ONLY valid JSON, without markdown fences or additional prose. "
+            "Use this exact schema: "
+            '{"recommended_status":"New|Active|Closed",'
+            '"classification":"True Positive|False Positive|Benign Positive|Undetermined|Unspecified",'
+            '"comment":"one concise analyst-facing sentence"}. '
+            "Do not recommend closing an incident unless the available context strongly supports it.\n\n"
+            f"Title: {incident_title}\n"
+            f"Description: {incident_description}"
         )
+
         try:
             response = openai.ChatCompletion.create(
                 model=self.model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=self.temperature,
-                max_tokens=200,
+                max_tokens=220,
             )
-            content = response.choices[0].message["content"]  # type: ignore
-            # Parse simple structured output expected as comma‑separated values
-            recommended_status = "Active"
-            classification = ""
-            comment = content.strip()
-            # Naïve parsing – you can implement JSON output parsing for reliability
-            return {
-                "recommended_status": recommended_status,
-                "classification": classification,
-                "comment": comment,
-            }
+            content = response.choices[0].message["content"]  # type: ignore[index]
+            return self._parse_response(content)
         except Exception as exc:
             logger.error("Error invoking LLM: %s", exc)
-            # Default to leaving the incident active
-            return {
-                "recommended_status": "Active",
-                "classification": "Unspecified",
-                "comment": "LLM analysis failed; leaving incident open.",
-            }
+            return self._safe_fallback("LLM analysis failed; leaving incident open for analyst review.")
+
+    def _parse_response(self, content: str) -> Dict[str, str]:
+        """Parse and validate the model response, with safe fallbacks."""
+        if not content or not content.strip():
+            logger.warning("LLM returned empty content")
+            return self._safe_fallback("LLM returned no usable analysis; leaving incident open.")
+
+        parsed: Dict[str, Any] | None = None
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to recover if the provider wrapped the object in prose/fences.
+            match = re.search(r"\{.*\}", content, flags=re.DOTALL)
+            if match:
+                try:
+                    parsed = json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    parsed = None
+
+        if not isinstance(parsed, dict):
+            logger.warning("LLM returned non-JSON or invalid JSON content")
+            return self._safe_fallback("LLM response could not be parsed safely; leaving incident open.")
+
+        recommended_status = str(parsed.get("recommended_status", "Active")).strip().title()
+        classification = str(parsed.get("classification", "Unspecified")).strip()
+        comment = str(parsed.get("comment", "")).strip()
+
+        if recommended_status not in _ALLOWED_STATUSES:
+            logger.warning("Invalid recommended_status from LLM: %s", recommended_status)
+            recommended_status = "Active"
+
+        if classification not in _ALLOWED_CLASSIFICATIONS:
+            logger.warning("Invalid classification from LLM: %s", classification)
+            classification = "Unspecified"
+
+        if not comment:
+            comment = "No analyst-facing explanation was provided by the LLM."
+
+        return {
+            "recommended_status": recommended_status,
+            "classification": classification,
+            "comment": comment,
+        }
+
+    @staticmethod
+    def _safe_fallback(comment: str) -> Dict[str, str]:
+        return {
+            "recommended_status": "Active",
+            "classification": "Unspecified",
+            "comment": comment,
+        }
