@@ -12,6 +12,7 @@ Safety model:
 - recommendations are logged in dry-run mode
 - incident updates are only written when explicitly enabled
 - deterministic write policy checks can still block an update in write mode
+- closure recommendations require explicit human approval before update
 - metadata-only JSONL audit records are appended for each processed decision
 """
 from __future__ import annotations
@@ -23,6 +24,7 @@ from pathlib import Path
 from azure.mgmt.securityinsight.models import IncidentStatus
 from dotenv import load_dotenv
 
+from .approval import build_approval_decision
 from .audit import append_audit_record, build_audit_record
 from .llm_client import LLMClient
 from .models import IncidentSummary
@@ -71,6 +73,18 @@ def auto_apply_changes_enabled() -> bool:
         "yes",
         "on",
     }
+
+
+def approval_token() -> str | None:
+    """Return the optional local approval token for controlled write demos."""
+    raw = os.getenv("TRIAGE_APPROVAL_TOKEN")
+    return raw.strip() if raw and raw.strip() else None
+
+
+def approver_identity() -> str | None:
+    """Return the optional approver identity label for audit metadata."""
+    raw = os.getenv("TRIAGE_APPROVER")
+    return raw.strip() if raw and raw.strip() else None
 
 
 def audit_log_path() -> Path:
@@ -124,6 +138,9 @@ def _append_decision_audit(
     write_mode: bool,
     policy_allowed: bool,
     policy_reason: str,
+    approval_required: bool,
+    approval_status: str,
+    approved_by: str | None,
     applied_update: bool,
 ) -> None:
     """Append a metadata-only audit record without breaking triage on I/O failure."""
@@ -135,6 +152,9 @@ def _append_decision_audit(
         write_mode=write_mode,
         policy_allowed=policy_allowed,
         policy_reason=policy_reason,
+        approval_required=approval_required,
+        approval_status=approval_status,
+        approved_by=approved_by,
         applied_update=applied_update,
     )
     try:
@@ -161,7 +181,8 @@ def process_incident(
     Returning a boolean makes the safety behaviour testable: dry-run processing
     can be asserted without contacting Azure, while explicit write mode can be
     verified through mocked update calls. Even with write mode enabled, a
-    deterministic policy gate may still block a recommendation.
+    deterministic policy gate and an explicit approval state may still block a
+    recommendation.
     """
     summary = build_summary(incident)
     logger.info("Processing incident %s", summary.id)
@@ -174,6 +195,12 @@ def process_incident(
     classification = result.get("classification") or None
     comment = result.get("comment") or None
     status_enum = map_status(recommended_status)
+
+    approval = build_approval_decision(
+        recommended_status=recommended_status,
+        approval_token=approval_token(),
+        approver=approver_identity(),
+    )
 
     logger.info(
         "Recommendation for incident %s: status=%s classification=%s comment=%s",
@@ -194,6 +221,9 @@ def process_incident(
             write_mode=write_mode,
             policy_allowed=True,
             policy_reason=reason,
+            approval_required=approval.required,
+            approval_status=approval.status,
+            approved_by=approval.approved_by,
             applied_update=False,
         )
         return False
@@ -217,6 +247,30 @@ def process_incident(
             write_mode=write_mode,
             policy_allowed=False,
             policy_reason=write_policy.reason,
+            approval_required=approval.required,
+            approval_status=approval.status,
+            approved_by=approval.approved_by,
+            applied_update=False,
+        )
+        return False
+
+    if approval.required and approval.status != "approved":
+        logger.info(
+            "Human approval blocked incident %s recommendation: %s",
+            summary.id,
+            approval.reason,
+        )
+        _append_decision_audit(
+            summary=summary,
+            current_status=current_status,
+            recommended_status=recommended_status,
+            classification=classification,
+            write_mode=write_mode,
+            policy_allowed=True,
+            policy_reason=write_policy.reason,
+            approval_required=True,
+            approval_status=approval.status,
+            approved_by=approval.approved_by,
             applied_update=False,
         )
         return False
@@ -236,6 +290,9 @@ def process_incident(
             write_mode=False,
             policy_allowed=True,
             policy_reason=write_policy.reason,
+            approval_required=approval.required,
+            approval_status=approval.status,
+            approved_by=approval.approved_by,
             applied_update=False,
         )
         return False
@@ -256,6 +313,9 @@ def process_incident(
         write_mode=True,
         policy_allowed=True,
         policy_reason=write_policy.reason,
+        approval_required=approval.required,
+        approval_status=approval.status,
+        approved_by=approval.approved_by,
         applied_update=True,
     )
     return True
