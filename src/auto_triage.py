@@ -126,7 +126,7 @@ def _append_decision_audit(
     policy_reason: str,
     applied_update: bool,
 ) -> None:
-    """Append a metadata-only audit record for a triage decision."""
+    """Append a metadata-only audit record without breaking triage on I/O failure."""
     record = build_audit_record(
         incident_id=summary.id,
         current_status=_status_text(current_status),
@@ -137,7 +137,14 @@ def _append_decision_audit(
         policy_reason=policy_reason,
         applied_update=applied_update,
     )
-    append_audit_record(audit_log_path(), record)
+    try:
+        append_audit_record(audit_log_path(), record)
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "Could not append triage audit record for incident %s: %s",
+            summary.id,
+            exc,
+        )
 
 
 def process_incident(
