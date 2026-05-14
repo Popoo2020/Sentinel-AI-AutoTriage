@@ -11,7 +11,7 @@ from src.sentinel_client import (
 )
 
 
-def _incident(name: str, status: IncidentStatus) -> SimpleNamespace:
+def _incident(name: str, status: object) -> SimpleNamespace:
     return SimpleNamespace(
         name=name,
         properties=SimpleNamespace(
@@ -30,6 +30,26 @@ def test_list_active_incidents_filters_new_and_active_only() -> None:
                 _incident("incident-new", IncidentStatus.NEW),
                 _incident("incident-active", IncidentStatus.ACTIVE),
                 _incident("incident-closed", IncidentStatus.CLOSED),
+            ]
+        )
+    )
+
+    incidents = list_active_incidents(client, config)
+
+    assert [incident.name for incident in incidents] == [
+        "incident-new",
+        "incident-active",
+    ]
+
+
+def test_list_active_incidents_accepts_string_status_values() -> None:
+    config = SentinelConfig("sub", "rg", "workspace")
+    client = SimpleNamespace(
+        incidents=SimpleNamespace(
+            list=lambda **_kwargs: [
+                _incident("incident-new", "New"),
+                _incident("incident-active", "Active"),
+                _incident("incident-closed", "Closed"),
             ]
         )
     )
