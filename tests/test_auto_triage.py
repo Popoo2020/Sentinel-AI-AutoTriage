@@ -16,9 +16,11 @@ from src.sentinel_client import SentinelConfig
 
 
 @pytest.fixture(autouse=True)
-def isolate_audit_log(monkeypatch, tmp_path) -> None:
-    """Keep decision-log side effects isolated inside the pytest temp folder."""
+def isolate_local_runtime_state(monkeypatch, tmp_path) -> None:
+    """Keep audit and approval side effects isolated between tests."""
     monkeypatch.setenv("TRIAGE_AUDIT_LOG_PATH", str(tmp_path / "triage_audit.jsonl"))
+    monkeypatch.delenv("TRIAGE_APPROVAL_TOKEN", raising=False)
+    monkeypatch.delenv("TRIAGE_APPROVER", raising=False)
 
 
 def _incident(*, status: object = IncidentStatus.NEW) -> SimpleNamespace:
@@ -68,12 +70,14 @@ def test_build_summary_handles_sdk_like_incident() -> None:
     assert summary.status == IncidentStatus.NEW.name
 
 
-def test_process_incident_dry_run_does_not_apply_update(monkeypatch) -> None:
+def test_process_incident_dry_run_does_not_apply_even_when_closure_is_approved(monkeypatch) -> None:
     called = {"updated": False}
 
     def fake_update(*_args, **_kwargs) -> None:
         called["updated"] = True
 
+    monkeypatch.setenv("TRIAGE_APPROVAL_TOKEN", "1")
+    monkeypatch.setenv("TRIAGE_APPROVER", "security-manager")
     monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
 
     applied = process_incident(
@@ -95,7 +99,34 @@ def test_process_incident_dry_run_does_not_apply_update(monkeypatch) -> None:
     assert called["updated"] is False
 
 
-def test_process_incident_write_mode_applies_update(monkeypatch) -> None:
+def test_process_incident_write_mode_blocks_closure_without_human_approval(monkeypatch) -> None:
+    called = {"updated": False}
+
+    def fake_update(*_args, **_kwargs) -> None:
+        called["updated"] = True
+
+    monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
+
+    applied = process_incident(
+        incident=_incident(status=IncidentStatus.NEW),
+        llm_client=FakeLLMClient(
+            {
+                "recommended_status": "Closed",
+                "classification": "True Positive",
+                "comment": "Confirmed suspicious activity after further review.",
+            }
+        ),
+        sentinel_client=object(),
+        config=SentinelConfig("sub", "rg", "workspace"),
+        write_mode=True,
+        logger=logging.getLogger("test.approval_block"),
+    )
+
+    assert applied is False
+    assert called["updated"] is False
+
+
+def test_process_incident_write_mode_applies_approved_closure_update(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_update(_client, _config, incident, *, status, classification, comment) -> None:
@@ -104,6 +135,8 @@ def test_process_incident_write_mode_applies_update(monkeypatch) -> None:
         captured["classification"] = classification
         captured["comment"] = comment
 
+    monkeypatch.setenv("TRIAGE_APPROVAL_TOKEN", "1")
+    monkeypatch.setenv("TRIAGE_APPROVER", "security-manager")
     monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
 
     applied = process_incident(
@@ -136,6 +169,7 @@ def test_process_incident_blocks_ambiguous_closure_in_write_mode(monkeypatch) ->
     def fake_update(*_args, **_kwargs) -> None:
         called["updated"] = True
 
+    monkeypatch.setenv("TRIAGE_APPROVAL_TOKEN", "1")
     monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
 
     applied = process_incident(
@@ -218,6 +252,7 @@ def test_process_incident_still_returns_when_audit_append_fails(monkeypatch) -> 
     def fake_append(*_args, **_kwargs) -> None:
         raise OSError("local audit path unavailable")
 
+    monkeypatch.setenv("TRIAGE_APPROVAL_TOKEN", "1")
     monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
     monkeypatch.setattr("src.auto_triage.append_audit_record", fake_append)
 
