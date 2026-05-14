@@ -2,7 +2,7 @@
 llm_client.py
 -------------
 
-LLM provider wrapper for the Sentinel-AI-AutoTriage prototype.
+LLM wrapper for the Sentinel-AI-AutoTriage prototype.
 
 The module asks the model for a strict JSON response and validates the result
 before the triage layer consumes it. If the model returns malformed content,
@@ -12,6 +12,9 @@ incident active for analyst review.
 Before any incident text is sent to the model, common sensitive-looking values
 are redacted by the local redaction layer. This is a transparent example of data
 minimisation, not a complete enterprise DLP system.
+
+A small provider boundary allows deterministic tests and benchmark runs to inject
+mock completion text without changing triage workflow code.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ import os
 import re
 from typing import Any
 
+from .providers import CompletionProvider
 from .redaction import redact_text
 
 try:
@@ -43,13 +47,24 @@ _ALLOWED_CLASSIFICATIONS = {
 class LLMClient:
     """Small abstraction for LLM-assisted incident triage recommendations."""
 
-    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.2) -> None:
+    def __init__(
+        self,
+        model_name: str = "gpt-4o-mini",
+        temperature: float = 0.2,
+        provider: CompletionProvider | None = None,
+    ) -> None:
         self.model_name = model_name
         self.temperature = temperature
+        self.provider = provider
+        self.client: Any | None = None
+
+        if provider is not None:
+            return
+
         api_key = os.getenv("OPENAI_API_KEY")
         if OpenAI is None:
             raise ImportError(
-                "openai package is not installed. Install openai or implement another provider."
+                "openai package is not installed. Install openai or inject a completion provider."
             )
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
@@ -84,17 +99,32 @@ class LLMClient:
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
+            content = self._complete(prompt)
+            return self._parse_response(content)
+        except Exception as exc:
+            logger.error("Error invoking LLM provider: %s", exc)
+            return self._safe_fallback("LLM analysis failed; leaving incident open for analyst review.")
+
+    def _complete(self, prompt: str) -> str:
+        """Return raw completion text from an injected provider or the OpenAI client."""
+        if self.provider is not None:
+            return self.provider.complete(
+                prompt=prompt,
+                model_name=self.model_name,
                 temperature=self.temperature,
                 max_tokens=220,
             )
-            content = response.choices[0].message.content or ""
-            return self._parse_response(content)
-        except Exception as exc:
-            logger.error("Error invoking LLM: %s", exc)
-            return self._safe_fallback("LLM analysis failed; leaving incident open for analyst review.")
+
+        if self.client is None:
+            raise RuntimeError("No LLM client or injected completion provider is configured")
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=self.temperature,
+            max_tokens=220,
+        )
+        return response.choices[0].message.content or ""
 
     @staticmethod
     def _build_prompt(incident_title: str, incident_description: str) -> str:
