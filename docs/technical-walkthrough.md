@@ -55,7 +55,22 @@ The parser:
 3. rejects invalid status/classification values,
 4. fails safely to `Active / Unspecified` when parsing or validation fails.
 
-## 5. Dry-run/write gate
+## 5. Deterministic write-policy gate
+
+Model output is not treated as final authority.  After parsing, the recommendation
+passes through `src/recommendation_policy.py` before any write can occur.
+
+The current write policy:
+
+- allows non-closure recommendations after the external write gate is enabled,
+- blocks closure if the classification is missing, ambiguous or unsupported,
+- blocks closure if the analyst-facing explanation is too short,
+- allows closure only when the deterministic conditions pass.
+
+This adds an important second layer of control between **model recommendation** and
+**state-changing action**.
+
+## 6. Dry-run/write gate
 
 The project runs in dry-run mode unless:
 
@@ -67,16 +82,38 @@ Even when the model recommends a different status, the tool:
 
 - logs the recommendation in dry-run mode,
 - does **not** call the Sentinel update path,
-- applies changes only when explicit write mode is enabled.
+- applies changes only when explicit write mode is enabled,
+- still obeys the deterministic write-policy gate.
 
-## 6. Defensive status comparison
+## 7. Defensive status comparison
 
 The workflow compares the current Sentinel status and the recommended status
 through a normalisation helper so equivalent enum/string values are treated as
 identical. This prevents unnecessary write attempts when the status is already
 correct.
 
-## 7. Test coverage philosophy
+## 8. Metadata-only audit trail
+
+Every triage decision can be appended to a local JSONL decision log through:
+
+```bash
+TRIAGE_AUDIT_LOG_PATH=logs/triage_audit.jsonl
+```
+
+`src/audit.py` deliberately records **metadata only**:
+
+- incident ID,
+- current status,
+- recommended status,
+- classification,
+- whether write mode was enabled,
+- whether deterministic policy allowed the action,
+- whether an update was actually applied.
+
+It does **not** store raw incident titles, descriptions or prompt text.  Audit-log
+I/O failures are handled as warnings so they do not crash the triage process.
+
+## 9. Test coverage philosophy
 
 The test suite deliberately targets the parts of the workflow that could affect
 safe operation:
@@ -85,12 +122,16 @@ safe operation:
 - redaction of sensitive-looking values,
 - dry-run behaviour,
 - explicit write-gate behaviour,
+- deterministic write-policy allow/block logic,
 - unchanged-status no-op behaviour,
 - Azure status normalisation,
 - update-path handling,
+- metadata-only audit record construction,
+- audit-log write behaviour,
+- non-blocking audit I/O failures,
 - required environment configuration.
 
-## 8. What would make it production-grade?
+## 10. What would make it production-grade?
 
 The current project is intentionally a **security-focused prototype**, not an
 unattended production closure engine. Production hardening would require:
@@ -98,7 +139,8 @@ unattended production closure engine. Production hardening would require:
 1. organisation-specific policy thresholds,
 2. approved classification mappings to Sentinel SDK expectations,
 3. analyst approval workflows,
-4. richer audit exports,
+4. centralised audit export and retention policy,
 5. labelled datasets for triage-quality evaluation,
 6. privacy/security review for incident data sent to external model providers,
-7. monitoring, rate limits and failure-mode observability.
+7. monitoring, rate limits and failure-mode observability,
+8. deployment guidance for managed identity and least-privilege Azure roles.
