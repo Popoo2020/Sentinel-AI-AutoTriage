@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from types import SimpleNamespace
 
+import pytest
 from azure.mgmt.securityinsight.models import IncidentStatus
 
 from src.auto_triage import (
@@ -12,6 +13,12 @@ from src.auto_triage import (
     process_incident,
 )
 from src.sentinel_client import SentinelConfig
+
+
+@pytest.fixture(autouse=True)
+def isolate_audit_log(monkeypatch, tmp_path) -> None:
+    """Keep decision-log side effects isolated inside the pytest temp folder."""
+    monkeypatch.setenv("TRIAGE_AUDIT_LOG_PATH", str(tmp_path / "triage_audit.jsonl"))
 
 
 def _incident(*, status: object = IncidentStatus.NEW) -> SimpleNamespace:
@@ -202,3 +209,31 @@ def test_process_incident_does_not_update_when_sdk_returns_string_status(monkeyp
 
     assert applied is False
     assert called["updated"] is False
+
+
+def test_process_incident_still_returns_when_audit_append_fails(monkeypatch) -> None:
+    def fake_update(*_args, **_kwargs) -> None:
+        return None
+
+    def fake_append(*_args, **_kwargs) -> None:
+        raise OSError("local audit path unavailable")
+
+    monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
+    monkeypatch.setattr("src.auto_triage.append_audit_record", fake_append)
+
+    applied = process_incident(
+        incident=_incident(status=IncidentStatus.NEW),
+        llm_client=FakeLLMClient(
+            {
+                "recommended_status": "Closed",
+                "classification": "True Positive",
+                "comment": "Confirmed suspicious activity after additional validation.",
+            }
+        ),
+        sentinel_client=object(),
+        config=SentinelConfig("sub", "rg", "workspace"),
+        write_mode=True,
+        logger=logging.getLogger("test.audit_io_failure"),
+    )
+
+    assert applied is True
