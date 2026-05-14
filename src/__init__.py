@@ -1,4 +1,5 @@
 """Public package surface for Sentinel-AI-AutoTriage."""
+from .audit import TriageAuditRecord, append_audit_record, build_audit_record
 from .llm_client import LLMClient
 from .models import IncidentSummary
 from .recommendation_policy import WritePolicyDecision, evaluate_write_recommendation
@@ -15,7 +16,10 @@ __all__ = [
     "LLMClient",
     "RedactionResult",
     "SentinelConfig",
+    "TriageAuditRecord",
     "WritePolicyDecision",
+    "append_audit_record",
+    "build_audit_record",
     "evaluate_write_recommendation",
     "get_sentinel_client",
     "list_active_incidents",
