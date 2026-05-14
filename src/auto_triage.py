@@ -11,6 +11,7 @@ Safety model:
 - `AUTO_APPLY_CHANGES=false` by default
 - recommendations are logged in dry-run mode
 - incident updates are only written when explicitly enabled
+- deterministic write policy checks can still block an update in write mode
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from dotenv import load_dotenv
 
 from .llm_client import LLMClient
 from .models import IncidentSummary
+from .recommendation_policy import evaluate_write_recommendation
 from .sentinel_client import (
     SentinelConfig,
     get_sentinel_client,
@@ -118,7 +120,8 @@ def process_incident(
 
     Returning a boolean makes the safety behaviour testable: dry-run processing
     can be asserted without contacting Azure, while explicit write mode can be
-    verified through mocked update calls.
+    verified through mocked update calls.  Even with write mode enabled, a
+    deterministic policy gate may still block a recommendation.
     """
     summary = build_summary(incident)
     logger.info("Processing incident %s", summary.id)
@@ -142,6 +145,19 @@ def process_incident(
 
     if _status_text(current_status) == _status_text(status_enum):
         logger.info("No status change recommended for incident %s", summary.id)
+        return False
+
+    write_policy = evaluate_write_recommendation(
+        recommended_status=recommended_status,
+        classification=classification,
+        comment=comment,
+    )
+    if not write_policy.allowed:
+        logger.info(
+            "Deterministic write policy blocked incident %s recommendation: %s",
+            summary.id,
+            write_policy.reason,
+        )
         return False
 
     if not write_mode:
