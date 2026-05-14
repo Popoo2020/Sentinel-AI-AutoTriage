@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "bench-001",
+    "title": "Repeated privileged sign-in failures",
+    "description": "Five failed sign-ins followed by a successful sign-in from a new location.",
+    "mock_model_response": "{\"recommended_status\":\"Active\",\"classification\":\"Undetermined\",\"comment\":\"Keep open for analyst investigation and correlation.\"}",
+    "expected_status": "Active",
+    "expected_classification": "Undetermined",
+    "expected_policy_allowed": true,
+    "expected_approval_required": false
+  },
+  {
+    "case_id": "bench-002",
+    "title": "Confirmed malicious PowerShell execution",
+    "description": "Correlated telemetry confirms suspicious encoded command execution and follow-on activity.",
+    "mock_model_response": "{\"recommended_status\":\"Closed\",\"classification\":\"True Positive\",\"comment\":\"Confirmed malicious activity after correlation with supporting host telemetry.\"}",
+    "expected_status": "Closed",
+    "expected_classification": "True Positive",
+    "expected_policy_allowed": true,
+    "expected_approval_required": true
+  },
+  {
+    "case_id": "bench-003",
+    "title": "Low-confidence behavioural anomaly",
+    "description": "The signal is noisy and there is no corroborating evidence of impact.",
+    "mock_model_response": "{\"recommended_status\":\"Closed\",\"classification\":\"Undetermined\",\"comment\":\"Close it.\"}",
+    "expected_status": "Closed",
+    "expected_classification": "Undetermined",
+    "expected_policy_allowed": false,
+    "expected_approval_required": true
+  },
+  {
+    "case_id": "bench-004",
+    "title": "Malformed model output recovery",
+    "description": "Used to verify safe fallback when the model output is not valid JSON.",
+    "mock_model_response": "not-json",
+    "expected_status": "Active",
+    "expected_classification": "Unspecified",
+    "expected_policy_allowed": true,
+    "expected_approval_required": false
+  }
+]
