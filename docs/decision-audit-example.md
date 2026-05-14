@@ -4,19 +4,22 @@ Sentinel-AI-AutoTriage can append one JSONL record per processed triage decision
 The record is intentionally **metadata-only** and does not store raw incident text,
 raw prompts, descriptions or titles.
 
-Example JSONL record:
+Example JSONL record for a closure recommendation that remains pending human approval:
 
 ```json
 {
   "applied_update": false,
-  "classification": "Undetermined",
+  "approval_required": true,
+  "approval_status": "pending",
+  "approved_by": null,
+  "classification": "True Positive",
   "current_status": "new",
   "incident_id": "incident-demo-001",
-  "policy_allowed": false,
-  "policy_reason": "Closure blocked: classification is missing, ambiguous or unsupported.",
+  "policy_allowed": true,
+  "policy_reason": "Closure recommendation passed deterministic classification and comment checks.",
   "recommended_status": "Closed",
-  "timestamp": "2026-05-13T09:14:04+00:00",
-  "write_mode": true
+  "timestamp": "2026-05-14T09:14:04+00:00",
+  "write_mode": false
 }
 ```
 
@@ -29,8 +32,11 @@ Example JSONL record:
 | `recommended_status` | Validated recommendation from the model path |
 | `classification` | Parsed classification value, when present |
 | `write_mode` | Whether explicit write mode was enabled |
-| `policy_allowed` | Whether deterministic policy allowed the action |
+| `policy_allowed` | Whether deterministic recommendation checks allowed the action |
 | `policy_reason` | Human-readable policy explanation |
+| `approval_required` | Whether a separate approval state is required |
+| `approval_status` | `not_required`, `pending`, `approved`, or `rejected` |
+| `approved_by` | Metadata label for the local approver when present |
 | `applied_update` | Whether the Sentinel update path actually executed |
 
 ## What is deliberately excluded
