@@ -1,49 +1,44 @@
 """
 sentinel_client.py
--------------------
+------------------
 
-Wrapper around the Azure Security Insights (Microsoft Sentinel) SDK. Handles
-authentication via DefaultAzureCredential and exposes helper methods for
-listing and updating incidents. Environment variables are used for
-configuration; no secrets are hard‑coded. This module embraces the
-principle of least privilege by using token‑based authentication【987667603810256†L350-L394】.
+Microsoft Sentinel SDK wrapper used by Sentinel-AI-AutoTriage.
 
+The module intentionally keeps the Azure integration small and inspectable:
+- authenticate with DefaultAzureCredential
+- list active/new incidents
+- update an incident only when the higher-level workflow explicitly allows it
+
+No secrets are hard-coded in this module. Runtime configuration is provided via
+environment variables and Azure identity mechanisms.
 """
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
-from typing import Iterable, List
 
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
+from azure.identity import DefaultAzureCredential
 from azure.mgmt.securityinsight import SecurityInsights
-from azure.mgmt.securityinsight.models import Incident, IncidentSeverity, IncidentStatus
-
+from azure.mgmt.securityinsight.models import Incident, IncidentStatus
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SentinelConfig:
+    """Azure identifiers required to access a Sentinel workspace."""
+
     subscription_id: str
     resource_group: str
     workspace_name: str
 
 
 def get_credential() -> DefaultAzureCredential:
-    """Return a credential for authenticating to Azure.
-
-    Uses DefaultAzureCredential, which automatically chooses between environment
-    variables, managed identity, or developer credentials【987667603810256†L350-L365】. Service principal
-    variables (AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET) should be
-    defined in the environment【987667603810256†L428-L433】.
-    """
+    """Return a validated DefaultAzureCredential instance."""
     try:
         credential = DefaultAzureCredential()
-        # Attempt to get a token to validate credentials early
         credential.get_token("https://management.azure.com/.default")
-        logger.debug("Obtained token using DefaultAzureCredential")
+        logger.debug("Validated Azure credentials using DefaultAzureCredential")
         return credential
     except Exception as exc:
         logger.error("Failed to obtain Azure credentials: %s", exc)
@@ -51,24 +46,25 @@ def get_credential() -> DefaultAzureCredential:
 
 
 def get_sentinel_client(config: SentinelConfig) -> SecurityInsights:
-    """Initialise a SecurityInsights client for Microsoft Sentinel."""
+    """Initialise a SecurityInsights client for Microsoft Sentinel."""
     credential = get_credential()
-    client = SecurityInsights(credential, config.subscription_id)
-    return client
+    return SecurityInsights(credential, config.subscription_id)
 
 
-def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> List[Incident]:
-    """Fetch a list of active (New or Active) incidents from Microsoft Sentinel."""
-    incidents: List[Incident] = []
+def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> list[Incident]:
+    """Fetch incidents whose Sentinel status is New or Active."""
+    incidents: list[Incident] = []
     try:
         pager = client.incidents.list(
             resource_group_name=config.resource_group,
             workspace_name=config.workspace_name,
         )
         for incident in pager:
-            if incident.properties and incident.properties.status in [IncidentStatus.NEW, IncidentStatus.ACTIVE]:
+            properties = getattr(incident, "properties", None)
+            status = getattr(properties, "status", None)
+            if status in {IncidentStatus.NEW, IncidentStatus.ACTIVE}:
                 incidents.append(incident)
-        logger.info("Fetched %d active incidents", len(incidents))
+        logger.info("Fetched %d active/new incidents", len(incidents))
         return incidents
     except Exception as exc:
         logger.error("Error listing incidents: %s", exc)
@@ -83,15 +79,13 @@ def update_incident_status(
     classification: str | None = None,
     comment: str | None = None,
 ) -> None:
-    """Update the status of an incident and optionally add classification/comment.
+    """Update incident status and optional closure metadata.
 
-    Microsoft Sentinel allows closing or updating incidents via the API. The
-    underlying SDK uses the `Incident` model. This function retrieves the
-    existing incident, modifies its status, adds classification data and
-    submits the update.
+    This function is deliberately narrow.  It is intended to be called only by
+    the explicit write path in ``auto_triage.py`` after the dry-run/write gate has
+    already been evaluated.
     """
     try:
-        # Retrieve the latest incident record
         current = client.incidents.get(
             resource_group_name=config.resource_group,
             workspace_name=config.workspace_name,
@@ -101,14 +95,17 @@ def update_incident_status(
             logger.warning("Incident %s not found", incident.name)
             return
 
-        # Modify status and classification
-        current.properties.status = status
-        if classification:
-            current.properties.classification = classification
-        if comment:
-            current.properties.classification_comment = comment
+        properties = getattr(current, "properties", None)
+        if properties is None:
+            logger.warning("Incident %s has no properties and cannot be updated", incident.name)
+            return
 
-        # Update incident
+        properties.status = status
+        if classification:
+            properties.classification = classification
+        if comment:
+            properties.classification_comment = comment
+
         client.incidents.create_or_update(
             resource_group_name=config.resource_group,
             workspace_name=config.workspace_name,
