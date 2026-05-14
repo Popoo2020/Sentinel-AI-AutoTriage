@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict
+from typing import Any
 
 from .redaction import redact_text
 
@@ -55,7 +55,7 @@ class LLMClient:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         self.client = OpenAI(api_key=api_key)
 
-    def analyse_incident(self, incident_title: str, incident_description: str) -> Dict[str, str]:
+    def analyse_incident(self, incident_title: str, incident_description: str) -> dict[str, str]:
         """Return a validated incident triage recommendation.
 
         Expected output schema:
@@ -111,13 +111,13 @@ class LLMClient:
             f"Description: {incident_description}"
         )
 
-    def _parse_response(self, content: str) -> Dict[str, str]:
+    def _parse_response(self, content: str) -> dict[str, str]:
         """Parse and validate the model response, with safe fallbacks."""
         if not content or not content.strip():
             logger.warning("LLM returned empty content")
             return self._safe_fallback("LLM returned no usable analysis; leaving incident open.")
 
-        parsed: Dict[str, Any] | None = None
+        parsed: dict[str, Any] | None = None
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
@@ -154,7 +154,7 @@ class LLMClient:
         }
 
     @staticmethod
-    def _safe_fallback(comment: str) -> Dict[str, str]:
+    def _safe_fallback(comment: str) -> dict[str, str]:
         return {
             "recommended_status": "Active",
             "classification": "Unspecified",
