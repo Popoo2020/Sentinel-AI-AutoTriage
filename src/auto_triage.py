@@ -79,15 +79,29 @@ def map_status(recommended_status: str) -> IncidentStatus:
     return IncidentStatus.ACTIVE
 
 
+def _status_text(status: object) -> str:
+    """Normalise enum/string status values into lower-case text."""
+    name = getattr(status, "name", None)
+    if name:
+        return str(name).lower()
+    value = getattr(status, "value", status)
+    return str(value).split(".")[-1].lower()
+
+
 def build_summary(incident: object) -> IncidentSummary:
     """Convert a Sentinel SDK incident into the compact LLM-facing summary."""
     properties = getattr(incident, "properties", None)
+    severity = getattr(properties, "severity", None)
+    status = getattr(properties, "status", None)
+    severity_label = getattr(severity, "name", None) or str(severity or "Unknown")
+    status_label = getattr(status, "name", None) or str(status or "Unknown")
+
     return IncidentSummary(
         id=str(getattr(incident, "name", "unknown-incident")),
         title=getattr(properties, "title", None) or "(no title)",
         description=getattr(properties, "description", None) or "(no description)",
-        severity=getattr(getattr(properties, "severity", None), "name", "Unknown"),
-        status=getattr(getattr(properties, "status", None), "name", "Unknown"),
+        severity=severity_label,
+        status=status_label,
     )
 
 
@@ -126,7 +140,7 @@ def process_incident(
         comment,
     )
 
-    if status_enum == current_status:
+    if _status_text(current_status) == _status_text(status_enum):
         logger.info("No status change recommended for incident %s", summary.id)
         return False
 
