@@ -1,0 +1,7 @@
+{
+  "id": "incident-demo-001",
+  "title": "Repeated privileged sign-in failures from analyst@example.com",
+  "description": "Five failed sign-in attempts followed by a success from 10.10.10.10. token=abc123 should be redacted before LLM processing.",
+  "severity": "High",
+  "status": "New"
+}
