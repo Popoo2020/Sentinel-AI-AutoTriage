@@ -8,7 +8,8 @@ Sentinel-AI-AutoTriage is a security-focused prototype for **authorised** Micros
 - `AUTO_APPLY_CHANGES=false` should remain the default unless testing in a controlled environment.
 - Any write action to Sentinel should be reviewed within the organisation's incident-response and change-management procedures.
 - Model output is treated as a **recommendation**, not as an independent authority.
-- A deterministic write-policy gate can still block a model recommendation even when write mode is enabled.
+- A deterministic recommendation-policy gate can still block a model recommendation even when write mode is enabled.
+- Closure recommendations additionally require an explicit human-approval state before the update path can execute.
 
 ## Data minimisation before LLM invocation
 
@@ -22,9 +23,9 @@ The project includes a deterministic redaction layer that masks representative:
 
 This is a transparent portfolio-grade example of data minimisation. It is **not** a complete DLP system and should not be treated as a substitute for enterprise data classification, secret scanning or privacy controls.
 
-## Deterministic write-policy gate
+## Deterministic recommendation-policy gate
 
-Before an update can be sent to Sentinel, `src/recommendation_policy.py` evaluates whether the recommendation is specific enough to write.
+Before an update can be sent to Sentinel, `src/recommendation_policy.py` evaluates whether the recommendation is specific enough to act on.
 
 The current policy:
 
@@ -34,6 +35,19 @@ The current policy:
 - allows closure only when the deterministic checks pass.
 
 This prevents the system from treating model output alone as sufficient authority for a sensitive state change.
+
+## Human approval state for closure recommendations
+
+`src/approval.py` adds an explicit metadata-only approval object for closure paths.
+
+The current prototype behaviour is intentionally conservative:
+
+- non-closure recommendations do not require approval,
+- closure recommendations enter `pending` approval by default,
+- a local explicit approval indicator is required before a closure write can proceed,
+- approval metadata can be recorded in the decision log without storing raw incident content.
+
+A production implementation should replace the local demonstration indicator with a durable analyst queue, signed approval workflow, ticket state or equivalent enterprise control.
 
 ## Metadata-only decision audit trail
 
@@ -50,9 +64,21 @@ These records are intentionally **metadata-only**. They capture:
 - classification,
 - whether write mode was enabled,
 - whether deterministic policy allowed the action,
+- whether approval was required,
+- the approval state,
 - whether an update was applied.
 
 They intentionally do **not** store raw incident titles, descriptions or prompt content. Audit-log file I/O failures are logged as warnings and do not crash the triage flow.
+
+## Provider boundary and benchmark safety
+
+The repository includes:
+
+- an injectable completion-provider boundary for deterministic tests and evaluation flows,
+- a static mock provider for benchmark execution without external model calls,
+- a deterministic benchmark that validates parsing, policy checks and approval expectations.
+
+These components are intended to improve reviewability and repeatability. They are not positioned as a live-model quality guarantee.
 
 ## Responsible use
 
