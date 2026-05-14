@@ -26,8 +26,9 @@ It retrieves active incidents, prepares a compact incident summary, redacts comm
 | Explicit write-action gate via `AUTO_APPLY_CHANGES` | ✅ Implemented |
 | Dry-run-first execution model | ✅ Implemented |
 | Console + file logging | ✅ Implemented |
-| Unit tests for redaction, parsing, status handling and update logic | ✅ Implemented |
+| Unit tests for redaction, parsing, status handling, configuration and update logic | ✅ Implemented |
 | CI linting, tests and coverage reporting | ✅ Implemented |
+| Technical walkthrough and dry-run demonstration docs | ✅ Implemented |
 | Production-grade policy approvals and operational benchmarking | 🟡 Future hardening |
 
 ## Architecture
@@ -102,12 +103,17 @@ src/
 
 tests/
   test_auto_triage.py
+  test_config_and_models.py
   test_llm_client.py
   test_redaction.py
   test_sentinel_client.py
 
 samples/
   sample_incident.json
+
+docs/
+  technical-walkthrough.md
+  sample-dry-run-output.md
 
 .github/workflows/
   ci.yml
@@ -117,6 +123,7 @@ requirements.txt
 requirements-dev.txt
 SECURITY.md
 CHANGELOG.md
+LICENSE
 ```
 
 ## Configuration
@@ -188,6 +195,12 @@ samples/sample_incident.json
 
 It contains an example email, IPv4 address and token-like value so the redaction behaviour is easy to explain during portfolio review or technical discussion.
 
+## Supporting documentation
+
+- [`docs/technical-walkthrough.md`](docs/technical-walkthrough.md) — a detailed explanation of the architecture, safety model and test philosophy.
+- [`docs/sample-dry-run-output.md`](docs/sample-dry-run-output.md) — an illustrative dry-run transcript showing recommendations without write actions.
+- [`SECURITY.md`](SECURITY.md) — responsible-use guidance and the intended non-destructive operating model.
+
 ## Current hardening achieved
 
 - Strict model response validation
@@ -196,7 +209,8 @@ It contains an example email, IPv4 address and token-like value so the redaction
 - Redaction before LLM invocation
 - Unit coverage across high-risk decision points
 - Defensive Sentinel status handling
-- CI enforcement for linting and tests
+- Configuration and model tests
+- CI enforcement for linting, tests and coverage reporting
 - Documented responsible-use posture in `SECURITY.md`
 
 ## Next sensible extensions
