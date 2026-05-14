@@ -75,7 +75,7 @@ def test_process_incident_dry_run_does_not_apply_update(monkeypatch) -> None:
             {
                 "recommended_status": "Closed",
                 "classification": "True Positive",
-                "comment": "Verified malicious activity.",
+                "comment": "Confirmed suspicious activity after further review.",
             }
         ),
         sentinel_client=object(),
@@ -105,7 +105,7 @@ def test_process_incident_write_mode_applies_update(monkeypatch) -> None:
             {
                 "recommended_status": "Closed",
                 "classification": "True Positive",
-                "comment": "Verified malicious activity.",
+                "comment": "Confirmed suspicious activity after further review.",
             }
         ),
         sentinel_client=object(),
@@ -119,8 +119,35 @@ def test_process_incident_write_mode_applies_update(monkeypatch) -> None:
         "incident": "incident-001",
         "status": IncidentStatus.CLOSED,
         "classification": "True Positive",
-        "comment": "Verified malicious activity.",
+        "comment": "Confirmed suspicious activity after further review.",
     }
+
+
+def test_process_incident_blocks_ambiguous_closure_in_write_mode(monkeypatch) -> None:
+    called = {"updated": False}
+
+    def fake_update(*_args, **_kwargs) -> None:
+        called["updated"] = True
+
+    monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
+
+    applied = process_incident(
+        incident=_incident(status=IncidentStatus.NEW),
+        llm_client=FakeLLMClient(
+            {
+                "recommended_status": "Closed",
+                "classification": "Undetermined",
+                "comment": "The recommendation is uncertain and should remain blocked.",
+            }
+        ),
+        sentinel_client=object(),
+        config=SentinelConfig("sub", "rg", "workspace"),
+        write_mode=True,
+        logger=logging.getLogger("test.policy_block"),
+    )
+
+    assert applied is False
+    assert called["updated"] is False
 
 
 def test_process_incident_does_not_update_when_status_is_unchanged(monkeypatch) -> None:
