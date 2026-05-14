@@ -8,6 +8,10 @@ The module asks the model for a strict JSON response and validates the result
 before the triage layer consumes it. If the model returns malformed content,
 the client degrades safely to a non-destructive recommendation that leaves the
 incident active for analyst review.
+
+Before any incident text is sent to the model, common sensitive-looking values
+are redacted by the local redaction layer. This is a transparent example of data
+minimisation, not a complete enterprise DLP system.
 """
 from __future__ import annotations
 
@@ -16,6 +20,8 @@ import logging
 import os
 import re
 from typing import Any, Dict
+
+from .redaction import redact_text
 
 try:
     from openai import OpenAI  # type: ignore
@@ -59,16 +65,22 @@ class LLMClient:
           "comment": "short analyst-facing explanation"
         }
         """
-        prompt = (
-            "You are assisting a cybersecurity analyst with Microsoft Sentinel incident triage. "
-            "Return ONLY valid JSON, without markdown fences or additional prose. "
-            "Use this exact schema: "
-            '{"recommended_status":"New|Active|Closed",'
-            '"classification":"True Positive|False Positive|Benign Positive|Undetermined|Unspecified",'
-            '"comment":"one concise analyst-facing sentence"}. '
-            "Do not recommend closing an incident unless the available context strongly supports it.\n\n"
-            f"Title: {incident_title}\n"
-            f"Description: {incident_description}"
+        title_redaction = redact_text(incident_title)
+        description_redaction = redact_text(incident_description)
+        total_redactions = title_redaction.redaction_count + description_redaction.redaction_count
+        if total_redactions:
+            redaction_types = sorted(
+                set(title_redaction.redaction_types + description_redaction.redaction_types)
+            )
+            logger.info(
+                "Redacted %d sensitive-looking value(s) before LLM analysis; types=%s",
+                total_redactions,
+                ",".join(redaction_types),
+            )
+
+        prompt = self._build_prompt(
+            incident_title=title_redaction.text,
+            incident_description=description_redaction.text,
         )
 
         try:
@@ -83,6 +95,21 @@ class LLMClient:
         except Exception as exc:
             logger.error("Error invoking LLM: %s", exc)
             return self._safe_fallback("LLM analysis failed; leaving incident open for analyst review.")
+
+    @staticmethod
+    def _build_prompt(incident_title: str, incident_description: str) -> str:
+        """Build the strict JSON-response prompt used for triage recommendations."""
+        return (
+            "You are assisting a cybersecurity analyst with Microsoft Sentinel incident triage. "
+            "Return ONLY valid JSON, without markdown fences or additional prose. "
+            "Use this exact schema: "
+            '{"recommended_status":"New|Active|Closed",'
+            '"classification":"True Positive|False Positive|Benign Positive|Undetermined|Unspecified",'
+            '"comment":"one concise analyst-facing sentence"}. '
+            "Do not recommend closing an incident unless the available context strongly supports it.\n\n"
+            f"Title: {incident_title}\n"
+            f"Description: {incident_description}"
+        )
 
     def _parse_response(self, content: str) -> Dict[str, str]:
         """Parse and validate the model response, with safe fallbacks."""
