@@ -1,9 +1,9 @@
 """Structured, metadata-only audit records for triage decisions.
 
 The audit trail intentionally avoids incident titles, descriptions and raw prompt
-content.  It captures only the decision metadata needed to understand what the
-workflow recommended, whether deterministic policy allowed it, and whether an
-update was actually applied.
+content. It captures only the decision metadata needed to understand what the
+workflow recommended, whether deterministic policy allowed it, whether explicit
+human approval was required, and whether an update was actually applied.
 """
 from __future__ import annotations
 
@@ -25,6 +25,9 @@ class TriageAuditRecord:
     write_mode: bool
     policy_allowed: bool
     policy_reason: str
+    approval_required: bool
+    approval_status: str
+    approved_by: str | None
     applied_update: bool
 
 
@@ -37,6 +40,9 @@ def build_audit_record(
     write_mode: bool,
     policy_allowed: bool,
     policy_reason: str,
+    approval_required: bool,
+    approval_status: str,
+    approved_by: str | None,
     applied_update: bool,
 ) -> TriageAuditRecord:
     """Create a timestamped metadata-only audit record."""
@@ -49,6 +55,9 @@ def build_audit_record(
         write_mode=write_mode,
         policy_allowed=policy_allowed,
         policy_reason=policy_reason,
+        approval_required=approval_required,
+        approval_status=approval_status,
+        approved_by=approved_by,
         applied_update=applied_update,
     )
 
