@@ -14,7 +14,7 @@ from src.auto_triage import (
 from src.sentinel_client import SentinelConfig
 
 
-def _incident(*, status: IncidentStatus = IncidentStatus.NEW) -> SimpleNamespace:
+def _incident(*, status: object = IncidentStatus.NEW) -> SimpleNamespace:
     return SimpleNamespace(
         name="incident-001",
         properties=SimpleNamespace(
@@ -144,6 +144,33 @@ def test_process_incident_does_not_update_when_status_is_unchanged(monkeypatch) 
         config=SentinelConfig("sub", "rg", "workspace"),
         write_mode=True,
         logger=logging.getLogger("test.no_change"),
+    )
+
+    assert applied is False
+    assert called["updated"] is False
+
+
+def test_process_incident_does_not_update_when_sdk_returns_string_status(monkeypatch) -> None:
+    called = {"updated": False}
+
+    def fake_update(*_args, **_kwargs) -> None:
+        called["updated"] = True
+
+    monkeypatch.setattr("src.auto_triage.update_incident_status", fake_update)
+
+    applied = process_incident(
+        incident=_incident(status="Active"),
+        llm_client=FakeLLMClient(
+            {
+                "recommended_status": "Active",
+                "classification": "Undetermined",
+                "comment": "Keep open for review.",
+            }
+        ),
+        sentinel_client=object(),
+        config=SentinelConfig("sub", "rg", "workspace"),
+        write_mode=True,
+        logger=logging.getLogger("test.string_status"),
     )
 
     assert applied is False
