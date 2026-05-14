@@ -2,15 +2,14 @@
 models.py
 ---------
 
-Shared data structures used across the Sentinel‑AI‑AutoTriage project.
+Shared data structures used across the Sentinel-AI-AutoTriage project.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class IncidentSummary:
     """Simplified representation of a Sentinel incident for LLM processing."""
 
@@ -21,4 +20,5 @@ class IncidentSummary:
     status: str
 
     def as_prompt(self) -> str:
+        """Render a compact analyst-readable prompt fragment."""
         return f"[{self.severity}] {self.title}: {self.description}"
