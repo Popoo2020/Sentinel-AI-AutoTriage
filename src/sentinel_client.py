@@ -51,6 +51,15 @@ def get_sentinel_client(config: SentinelConfig) -> SecurityInsights:
     return SecurityInsights(credential, config.subscription_id)
 
 
+def _normalise_status(status: object) -> str:
+    """Normalise SDK enum/string status values into lower-case text."""
+    name = getattr(status, "name", None)
+    if name:
+        return str(name).lower()
+    value = getattr(status, "value", status)
+    return str(value).split(".")[-1].lower()
+
+
 def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> list[Incident]:
     """Fetch incidents whose Sentinel status is New or Active."""
     incidents: list[Incident] = []
@@ -62,7 +71,7 @@ def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> l
         for incident in pager:
             properties = getattr(incident, "properties", None)
             status = getattr(properties, "status", None)
-            if status in {IncidentStatus.NEW, IncidentStatus.ACTIVE}:
+            if _normalise_status(status) in {"new", "active"}:
                 incidents.append(incident)
         logger.info("Fetched %d active/new incidents", len(incidents))
         return incidents
@@ -81,7 +90,7 @@ def update_incident_status(
 ) -> None:
     """Update incident status and optional closure metadata.
 
-    This function is deliberately narrow.  It is intended to be called only by
+    This function is deliberately narrow. It is intended to be called only by
     the explicit write path in ``auto_triage.py`` after the dry-run/write gate has
     already been evaluated.
     """
