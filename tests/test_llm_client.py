@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from src.llm_client import LLMClient
+from src.providers import StaticMockProvider
 
 
 def _client_without_init() -> LLMClient:
@@ -56,27 +55,22 @@ def test_parse_response_fails_safe_on_non_json() -> None:
 
 
 def test_analyse_incident_redacts_sensitive_values_before_provider_call() -> None:
-    client = _client_without_init()
-    client.model_name = "fake-model"
-    client.temperature = 0.2
     captured: dict[str, str] = {}
 
-    class FakeCompletions:
-        @staticmethod
-        def create(**kwargs):
-            prompt = kwargs["messages"][0]["content"]
+    class CapturingProvider:
+        def complete(
+            self,
+            *,
+            prompt: str,
+            model_name: str,
+            temperature: float,
+            max_tokens: int,
+        ) -> str:
+            del model_name, temperature, max_tokens
             captured["prompt"] = prompt
-            return SimpleNamespace(
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(
-                            content='{"recommended_status":"Active","classification":"Undetermined","comment":"Analyst review required."}'
-                        )
-                    )
-                ]
-            )
+            return '{"recommended_status":"Active","classification":"Undetermined","comment":"Analyst review required."}'
 
-    client.client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    client = LLMClient(model_name="fake-model", provider=CapturingProvider())
 
     result = client.analyse_incident(
         "Analyst analyst@example.com observed token=abc123",
@@ -93,3 +87,23 @@ def test_analyse_incident_redacts_sensitive_values_before_provider_call() -> Non
     assert "[REDACTED_IP]" in prompt
     assert "[REDACTED_PASSWORD]" in prompt
     assert result["classification"] == "Undetermined"
+
+
+def test_static_mock_provider_can_drive_deterministic_llm_result() -> None:
+    client = LLMClient(
+        model_name="mock-model",
+        provider=StaticMockProvider(
+            '{"recommended_status":"Active","classification":"Undetermined","comment":"Mock benchmark result."}'
+        ),
+    )
+
+    result = client.analyse_incident(
+        "Mock title",
+        "Mock description",
+    )
+
+    assert result == {
+        "recommended_status": "Active",
+        "classification": "Undetermined",
+        "comment": "Mock benchmark result.",
+    }
