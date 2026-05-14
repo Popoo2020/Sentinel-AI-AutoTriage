@@ -12,6 +12,7 @@ Safety model:
 - recommendations are logged in dry-run mode
 - incident updates are only written when explicitly enabled
 - deterministic write policy checks can still block an update in write mode
+- metadata-only JSONL audit records are appended for each processed decision
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from pathlib import Path
 from azure.mgmt.securityinsight.models import IncidentStatus
 from dotenv import load_dotenv
 
+from .audit import append_audit_record, build_audit_record
 from .llm_client import LLMClient
 from .models import IncidentSummary
 from .recommendation_policy import evaluate_write_recommendation
@@ -71,6 +73,12 @@ def auto_apply_changes_enabled() -> bool:
     }
 
 
+def audit_log_path() -> Path:
+    """Return the metadata-only JSONL audit log path."""
+    raw = os.getenv("TRIAGE_AUDIT_LOG_PATH", "logs/triage_audit.jsonl").strip()
+    return Path(raw or "logs/triage_audit.jsonl")
+
+
 def map_status(recommended_status: str) -> IncidentStatus:
     """Map validated status text to the Sentinel IncidentStatus enum."""
     normalized = recommended_status.strip().lower()
@@ -107,6 +115,31 @@ def build_summary(incident: object) -> IncidentSummary:
     )
 
 
+def _append_decision_audit(
+    *,
+    summary: IncidentSummary,
+    current_status: object,
+    recommended_status: str,
+    classification: str | None,
+    write_mode: bool,
+    policy_allowed: bool,
+    policy_reason: str,
+    applied_update: bool,
+) -> None:
+    """Append a metadata-only audit record for a triage decision."""
+    record = build_audit_record(
+        incident_id=summary.id,
+        current_status=_status_text(current_status),
+        recommended_status=recommended_status,
+        classification=classification,
+        write_mode=write_mode,
+        policy_allowed=policy_allowed,
+        policy_reason=policy_reason,
+        applied_update=applied_update,
+    )
+    append_audit_record(audit_log_path(), record)
+
+
 def process_incident(
     *,
     incident: object,
@@ -120,7 +153,7 @@ def process_incident(
 
     Returning a boolean makes the safety behaviour testable: dry-run processing
     can be asserted without contacting Azure, while explicit write mode can be
-    verified through mocked update calls.  Even with write mode enabled, a
+    verified through mocked update calls. Even with write mode enabled, a
     deterministic policy gate may still block a recommendation.
     """
     summary = build_summary(incident)
@@ -144,7 +177,18 @@ def process_incident(
     )
 
     if _status_text(current_status) == _status_text(status_enum):
+        reason = "No update required because the current status already matches the recommendation."
         logger.info("No status change recommended for incident %s", summary.id)
+        _append_decision_audit(
+            summary=summary,
+            current_status=current_status,
+            recommended_status=recommended_status,
+            classification=classification,
+            write_mode=write_mode,
+            policy_allowed=True,
+            policy_reason=reason,
+            applied_update=False,
+        )
         return False
 
     write_policy = evaluate_write_recommendation(
@@ -158,6 +202,16 @@ def process_incident(
             summary.id,
             write_policy.reason,
         )
+        _append_decision_audit(
+            summary=summary,
+            current_status=current_status,
+            recommended_status=recommended_status,
+            classification=classification,
+            write_mode=write_mode,
+            policy_allowed=False,
+            policy_reason=write_policy.reason,
+            applied_update=False,
+        )
         return False
 
     if not write_mode:
@@ -166,6 +220,16 @@ def process_incident(
             summary.id,
             recommended_status,
             classification,
+        )
+        _append_decision_audit(
+            summary=summary,
+            current_status=current_status,
+            recommended_status=recommended_status,
+            classification=classification,
+            write_mode=False,
+            policy_allowed=True,
+            policy_reason=write_policy.reason,
+            applied_update=False,
         )
         return False
 
@@ -176,6 +240,16 @@ def process_incident(
         status=status_enum,
         classification=classification,
         comment=comment,
+    )
+    _append_decision_audit(
+        summary=summary,
+        current_status=current_status,
+        recommended_status=recommended_status,
+        classification=classification,
+        write_mode=True,
+        policy_allowed=True,
+        policy_reason=write_policy.reason,
+        applied_update=True,
     )
     return True
 
