@@ -18,17 +18,17 @@ import logging
 import os
 from pathlib import Path
 
+from azure.mgmt.securityinsight.models import IncidentStatus
 from dotenv import load_dotenv
 
+from .llm_client import LLMClient
+from .models import IncidentSummary
 from .sentinel_client import (
     SentinelConfig,
     get_sentinel_client,
     list_active_incidents,
     update_incident_status,
 )
-from .llm_client import LLMClient
-from .models import IncidentSummary
-from azure.mgmt.securityinsight.models import IncidentStatus
 
 
 def configure_logging() -> None:
@@ -61,7 +61,12 @@ def load_config() -> SentinelConfig:
 
 def auto_apply_changes_enabled() -> bool:
     """Return True only when explicit write mode has been enabled."""
-    return os.getenv("AUTO_APPLY_CHANGES", "false").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("AUTO_APPLY_CHANGES", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def map_status(recommended_status: str) -> IncidentStatus:
@@ -72,6 +77,77 @@ def map_status(recommended_status: str) -> IncidentStatus:
     if normalized == "new":
         return IncidentStatus.NEW
     return IncidentStatus.ACTIVE
+
+
+def build_summary(incident: object) -> IncidentSummary:
+    """Convert a Sentinel SDK incident into the compact LLM-facing summary."""
+    properties = getattr(incident, "properties", None)
+    return IncidentSummary(
+        id=str(getattr(incident, "name", "unknown-incident")),
+        title=getattr(properties, "title", None) or "(no title)",
+        description=getattr(properties, "description", None) or "(no description)",
+        severity=getattr(getattr(properties, "severity", None), "name", "Unknown"),
+        status=getattr(getattr(properties, "status", None), "name", "Unknown"),
+    )
+
+
+def process_incident(
+    *,
+    incident: object,
+    llm_client: LLMClient,
+    sentinel_client: object,
+    config: SentinelConfig,
+    write_mode: bool,
+    logger: logging.Logger,
+) -> bool:
+    """Process one incident and return True when an update is applied.
+
+    Returning a boolean makes the safety behaviour testable: dry-run processing
+    can be asserted without contacting Azure, while explicit write mode can be
+    verified through mocked update calls.
+    """
+    summary = build_summary(incident)
+    logger.info("Processing incident %s", summary.id)
+
+    properties = getattr(incident, "properties", None)
+    current_status = getattr(properties, "status", None)
+
+    result = llm_client.analyse_incident(summary.title, summary.description)
+    recommended_status = result.get("recommended_status", "Active")
+    classification = result.get("classification") or None
+    comment = result.get("comment") or None
+    status_enum = map_status(recommended_status)
+
+    logger.info(
+        "Recommendation for incident %s: status=%s classification=%s comment=%s",
+        summary.id,
+        recommended_status,
+        classification,
+        comment,
+    )
+
+    if status_enum == current_status:
+        logger.info("No status change recommended for incident %s", summary.id)
+        return False
+
+    if not write_mode:
+        logger.info(
+            "Dry-run mode: would update incident %s to status %s with classification %s",
+            summary.id,
+            recommended_status,
+            classification,
+        )
+        return False
+
+    update_incident_status(
+        sentinel_client,
+        config,
+        incident,
+        status=status_enum,
+        classification=classification,
+        comment=comment,
+    )
+    return True
 
 
 def run_triage() -> None:
@@ -89,7 +165,7 @@ def run_triage() -> None:
 
     sentinel_client = get_sentinel_client(config)
     try:
-        llm_client = LLMClient(model_name=os.getenv("LLM_MODEL", "gpt-4"))
+        llm_client = LLMClient(model_name=os.getenv("LLM_MODEL", "gpt-4o-mini"))
     except Exception as exc:
         logger.error("LLM client could not be initialised: %s", exc)
         return
@@ -97,52 +173,19 @@ def run_triage() -> None:
     incidents = list_active_incidents(sentinel_client, config)
     logger.info("Processing %d active/new incidents", len(incidents))
 
-    for inc in incidents:
-        props = inc.properties
-        summary = IncidentSummary(
-            id=inc.name,
-            title=props.title or "(no title)",
-            description=props.description or "(no description)",
-            severity=props.severity.name if props.severity else "Unknown",
-            status=props.status.name if props.status else "Unknown",
-        )
-        logger.info("Processing incident %s", summary.id)
+    updates_applied = 0
+    for incident in incidents:
+        if process_incident(
+            incident=incident,
+            llm_client=llm_client,
+            sentinel_client=sentinel_client,
+            config=config,
+            write_mode=write_mode,
+            logger=logger,
+        ):
+            updates_applied += 1
 
-        result = llm_client.analyse_incident(summary.title, summary.description)
-        recommended_status = result.get("recommended_status", "Active")
-        classification = result.get("classification") or None
-        comment = result.get("comment") or None
-        status_enum = map_status(recommended_status)
-
-        logger.info(
-            "Recommendation for incident %s: status=%s classification=%s comment=%s",
-            summary.id,
-            recommended_status,
-            classification,
-            comment,
-        )
-
-        if status_enum == props.status:
-            logger.info("No status change recommended for incident %s", summary.id)
-            continue
-
-        if not write_mode:
-            logger.info(
-                "Dry-run mode: would update incident %s to status %s with classification %s",
-                summary.id,
-                recommended_status,
-                classification,
-            )
-            continue
-
-        update_incident_status(
-            sentinel_client,
-            config,
-            inc,
-            status=status_enum,
-            classification=classification,
-            comment=comment,
-        )
+    logger.info("Triage run completed; applied_updates=%d", updates_applied)
 
 
 if __name__ == "__main__":
