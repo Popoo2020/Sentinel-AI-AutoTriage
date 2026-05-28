@@ -17,6 +17,7 @@ class CompletionProvider(Protocol):
         max_tokens: int,
     ) -> str:
         """Return raw completion text for one prompt."""
+        ...
 
 
 @dataclass(frozen=True)
