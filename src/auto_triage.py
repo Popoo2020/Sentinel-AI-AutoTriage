@@ -59,7 +59,7 @@ def load_config() -> SentinelConfig:
     resource_group = os.environ.get("RESOURCE_GROUP")
     workspace_name = os.environ.get("WORKSPACE_NAME")
     if not (subscription_id and resource_group and workspace_name):
-        raise EnvironmentError(
+        raise OSError(
             "SUBSCRIPTION_ID, RESOURCE_GROUP and WORKSPACE_NAME environment variables must be set"
         )
     return SentinelConfig(subscription_id, resource_group, workspace_name)
