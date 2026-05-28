@@ -23,7 +23,7 @@ def test_load_config_rejects_missing_required_environment(monkeypatch) -> None:
     monkeypatch.delenv("RESOURCE_GROUP", raising=False)
     monkeypatch.delenv("WORKSPACE_NAME", raising=False)
 
-    with pytest.raises(EnvironmentError):
+    with pytest.raises(OSError):
         load_config()
 
 
