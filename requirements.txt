@@ -2,3 +2,17 @@ azure-identity>=1.16.1
 azure-mgmt-securityinsight>=1.0.0
 openai>=1.0.0
 python-dotenv>=1.0.0
+
+# Explicit lower bounds for transitive packages flagged by dependency scanning.
+# These are kept as minimum versions to avoid freezing the project to stale pins.
+anyio>=4.4.0
+azure-core>=1.38.0
+h11>=0.16.0
+idna>=3.15
+requests>=2.32.2
+typing-extensions>=4.11
+urllib3>=1.26.19
+zipp>=3.19.1
+
+# OpenAI client runtime dependency explicitly included for scanner clarity.
+jiter>=0.4.0
