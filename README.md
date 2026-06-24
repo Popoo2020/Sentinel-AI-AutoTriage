@@ -1,6 +1,7 @@
 # Sentinel-AI-AutoTriage
 
 [![CI](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/ci.yml/badge.svg)](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/codeql.yml/badge.svg)](https://github.com/Popoo2020/Sentinel-AI-AutoTriage/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Sentinel-AI-AutoTriage** is a security-focused Microsoft Sentinel triage prototype that combines **LLM-assisted incident analysis** with explicit **safety gates**, **data minimisation before model invocation**, **deterministic recommendation-policy checks**, **human approval for sensitive closure paths**, and a **metadata-only decision audit trail**.
@@ -11,6 +12,18 @@ It retrieves active incidents, prepares a compact incident summary, redacts comm
 > Suitable for portfolio review, architecture discussion, controlled demos and further engineering — **not** for unattended production incident closure.
 
 ![Sentinel-AI-AutoTriage architecture](assets/sentinel-auto-triage-architecture.svg)
+
+## Hiring-manager view
+
+See [`docs/recruiter_summary.md`](docs/recruiter_summary.md) for a short role-oriented summary.
+
+This project is especially relevant for:
+
+- AI Security Engineer,
+- SOC Automation Engineer,
+- Cybersecurity GRC / Security Governance roles,
+- Responsible AI / AI Governance roles,
+- Microsoft Sentinel / SIEM automation roles.
 
 ## What is implemented
 
@@ -34,7 +47,8 @@ It retrieves active incidents, prepares a compact incident summary, redacts comm
 | Deterministic triage benchmark dataset and runner | ✅ Implemented |
 | Console + file logging | ✅ Implemented |
 | Unit tests for redaction, parsing, providers, policy, approval, audit, status handling, benchmark logic and update flow | ✅ Implemented |
-| CI linting, tests, coverage reporting and benchmark generation | ✅ Implemented |
+| CI linting, tests, coverage reporting, SAST, dependency audit and benchmark generation | ✅ Implemented |
+| CodeQL and Dependabot configuration | ✅ Implemented |
 | Technical walkthrough, deployment guide, provider-extension notes, dry-run transcript and audit-record examples | ✅ Implemented |
 | Durable production approval workflow / centralised audit retention | 🟡 Future hardening |
 
@@ -194,6 +208,7 @@ Audit-write failures are logged as warnings and do **not** crash the triage flow
 - **Benchmark harness** — repeatable safety-pipeline checks over representative triage cases.
 - **Testable workflow units** — incident processing is broken into smaller functions that can be asserted without Azure network calls.
 - **Structured logging** — console and local file logging for controlled triage runs.
+- **Security automation checks** — CI includes linting, coverage, SAST and dependency audit.
 
 ## Repository structure
 
@@ -230,144 +245,5 @@ samples/
   sample_incident.json
 
 docs/
-  benchmark-overview.md
-  decision-audit-example.md
-  deployment-guide.md
-  provider-extension.md
-  sample-dry-run-output.md
-  technical-walkthrough.md
-
-.github/workflows/
-  ci.yml
-
-.env.example
-.gitignore
-CHANGELOG.md
-LICENSE
-requirements-dev.txt
-requirements.txt
-SECURITY.md
+  recruiter_summary.md
 ```
-
-## Configuration
-
-Start from `.env.example`:
-
-```bash
-SUBSCRIPTION_ID=
-RESOURCE_GROUP=
-WORKSPACE_NAME=
-OPENAI_API_KEY=
-LLM_MODEL=gpt-4o-mini
-AUTO_APPLY_CHANGES=false
-TRIAGE_AUDIT_LOG_PATH=logs/triage_audit.jsonl
-TRIAGE_APPROVAL_TOKEN=
-TRIAGE_APPROVER=
-```
-
-The dry-run-safe default is:
-
-```bash
-AUTO_APPLY_CHANGES=false
-```
-
-## Quickstart
-
-```bash
-git clone https://github.com/Popoo2020/Sentinel-AI-AutoTriage.git
-cd Sentinel-AI-AutoTriage
-
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements-dev.txt
-cp .env.example .env
-python -m src.auto_triage
-```
-
-## Testing and quality checks
-
-```bash
-ruff check src tests
-pytest -q --cov=src --cov-report=term-missing
-python -m src.benchmark
-```
-
-The CI workflow runs:
-
-1. dependency installation via `requirements-dev.txt`,
-2. linting of `src` and `tests`,
-3. the full pytest suite,
-4. coverage reporting,
-5. deterministic benchmark-summary generation.
-
-## Example LLM response contract
-
-The analysis layer expects a JSON object shaped like:
-
-```json
-{
-  "recommended_status": "Active",
-  "classification": "True Positive",
-  "comment": "Suspicious repeated authentication failures against a privileged account require analyst review."
-}
-```
-
-## Example redaction-aware incident input
-
-A sample incident is included in:
-
-```text
-samples/sample_incident.json
-```
-
-It contains an example email, IPv4 address and token-like value so the redaction behaviour is easy to explain during portfolio review or technical discussion.
-
-## Supporting documentation
-
-- [`docs/technical-walkthrough.md`](docs/technical-walkthrough.md) — detailed architecture, redaction, provider boundary, policy, approval, audit and benchmark explanation.
-- [`docs/deployment-guide.md`](docs/deployment-guide.md) — conservative deployment posture and least-privilege design notes.
-- [`docs/provider-extension.md`](docs/provider-extension.md) — provider-abstraction and enterprise-adapter extension notes.
-- [`docs/benchmark-overview.md`](docs/benchmark-overview.md) — deterministic benchmark scope and limits.
-- [`docs/sample-dry-run-output.md`](docs/sample-dry-run-output.md) — illustrative dry-run transcript with approval blocking.
-- [`docs/decision-audit-example.md`](docs/decision-audit-example.md) — metadata-only JSONL audit-record example.
-- [`SECURITY.md`](SECURITY.md) — responsible-use guidance and the intended non-destructive operating model.
-
-## Current hardening achieved
-
-- Strict model response validation
-- Deterministic safe fallbacks
-- Explicit dry-run/write separation
-- Redaction before LLM invocation
-- Injectable provider boundary for deterministic tests and benchmark runs
-- Deterministic recommendation checks before write actions
-- Human approval state for closure recommendations
-- Metadata-only JSONL audit trail
-- Non-blocking audit I/O failure handling
-- Deterministic safety benchmark with generated report
-- Unit coverage across high-risk decision points
-- Defensive Sentinel status handling
-- Configuration and model tests
-- CI enforcement for linting, tests, coverage reporting and benchmark execution
-- Documented responsible-use posture in `SECURITY.md`
-
-## Next sensible extensions
-
-1. Replace the local approval indicator with a durable analyst workflow or ticket-state integration.
-2. Add labelled datasets for live-model triage-quality evaluation.
-3. Implement and test a concrete enterprise-hosted provider adapter behind the existing provider boundary.
-4. Add centralised audit export and retention policy.
-5. Add deployment automation and environment validation helpers.
-
-## Release readiness
-
-This repository is now positioned as a strong **`v0.2.x` security-focused prototype** once GitHub Actions confirms a green run for the current hardened baseline.
-
-## Known limitations
-
-- This is not a production SOC platform.
-- The approval mechanism is a metadata-only local prototype, not a durable production approval workflow.
-- It does not yet benchmark live-model recommendation quality against labelled incident datasets.
-- The enterprise-provider adapter remains an explicitly documented extension boundary rather than a completed live integration.
-- The redaction layer is intentionally scoped and does not replace enterprise DLP, privacy engineering or secret-scanning controls.
-- Automated incident updates should remain disabled unless tested in a controlled, authorised environment.
