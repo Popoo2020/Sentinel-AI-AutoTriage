@@ -15,4 +15,4 @@ urllib3>=1.26.19
 zipp>=3.19.1
 
 # OpenAI client runtime dependency explicitly included for scanner clarity.
-jiter>=0.4.0
+jiter>=0.15.0
