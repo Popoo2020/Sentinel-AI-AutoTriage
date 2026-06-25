@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <rect width="900" height="420" fill="#111827"/>
+  <rect x="40" y="40" width="820" height="340" rx="16" fill="#0f172a" stroke="#334155"/>
+  <text x="70" y="90" fill="#e5e7eb" font-family="monospace" font-size="24">Sentinel Portfolio Demo</text>
+  <text x="70" y="135" fill="#93c5fd" font-family="monospace" font-size="18">Benchmark summary</text>
+  <text x="90" y="175" fill="#e5e7eb" font-family="monospace" font-size="16">Cases evaluated: 4</text>
+  <text x="90" y="205" fill="#86efac" font-family="monospace" font-size="16">Dry-run mode: enabled</text>
+  <text x="90" y="235" fill="#e5e7eb" font-family="monospace" font-size="16">Audit record: metadata only</text>
+  <text x="90" y="265" fill="#e5e7eb" font-family="monospace" font-size="16">Review state: human approval required where needed</text>
+  <text x="70" y="330" fill="#86efac" font-family="monospace" font-size="15">CI validated · CodeQL checked · portfolio demo output</text>
+</svg>
