@@ -35,7 +35,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest -q --cov=src --cov-report=term-missing tests
+          python -m pytest -q --cov=src --cov-report=term-missing tests
 
       - name: Run Bandit review
         run: |
