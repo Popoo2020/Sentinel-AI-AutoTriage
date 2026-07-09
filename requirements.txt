@@ -1,7 +1,7 @@
 azure-identity>=1.16.1
 azure-mgmt-securityinsight>=1.0.0
 openai>=1.0.0
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 
 # Explicit lower bounds for transitive packages flagged by dependency scanning.
 # These are kept as minimum versions to avoid freezing the project to stale pins.
