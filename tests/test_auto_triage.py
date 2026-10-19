@@ -129,11 +129,12 @@ def test_process_incident_write_mode_blocks_closure_without_human_approval(monke
 def test_process_incident_write_mode_applies_approved_closure_update(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_update(_client, _config, incident, *, status, classification, comment) -> None:
+    def fake_update(_client, _config, incident, *, status, classification, comment) -> bool:
         captured["incident"] = incident.name
         captured["status"] = status
         captured["classification"] = classification
         captured["comment"] = comment
+        return True
 
     monkeypatch.setenv("TRIAGE_APPROVAL_TOKEN", "1")
     monkeypatch.setenv("TRIAGE_APPROVER", "security-manager")
@@ -246,8 +247,8 @@ def test_process_incident_does_not_update_when_sdk_returns_string_status(monkeyp
 
 
 def test_process_incident_still_returns_when_audit_append_fails(monkeypatch) -> None:
-    def fake_update(*_args, **_kwargs) -> None:
-        return None
+    def fake_update(*_args, **_kwargs) -> bool:
+        return True
 
     def fake_append(*_args, **_kwargs) -> None:
         raise OSError("local audit path unavailable")

@@ -81,7 +81,7 @@ def test_update_incident_status_mutates_and_submits_existing_incident() -> None:
         )
     )
 
-    update_incident_status(
+    applied = update_incident_status(
         client,
         config,
         source_incident,
@@ -91,7 +91,8 @@ def test_update_incident_status_mutates_and_submits_existing_incident() -> None:
     )
 
     assert current.properties.status == IncidentStatus.CLOSED
-    assert current.properties.classification == "True Positive"
+    assert applied is True
+    assert current.properties.classification == "TruePositive"
     assert current.properties.classification_comment == "Confirmed malicious activity."
     assert captured["incident_id"] == "incident-123"
     assert captured["incident"] is current
@@ -112,7 +113,7 @@ def test_update_incident_status_skips_missing_current_incident() -> None:
         )
     )
 
-    update_incident_status(
+    applied = update_incident_status(
         client,
         config,
         source_incident,
@@ -122,3 +123,4 @@ def test_update_incident_status_skips_missing_current_incident() -> None:
     )
 
     assert called["updated"] is False
+    assert applied is False

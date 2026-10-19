@@ -60,6 +60,17 @@ def _normalise_status(status: object) -> str:
     return str(value).split(".")[-1].lower()
 
 
+def get_incident_fields(incident: object) -> object | None:
+    """Read flattened SDK fields, with support for older nested test fixtures.
+
+    ``azure-mgmt-securityinsight`` exposes Incident.status/title/etc. directly;
+    the REST payload's ``properties`` object is not an SDK model attribute.
+    """
+    if hasattr(incident, "status"):
+        return incident
+    return getattr(incident, "properties", None)
+
+
 def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> list[Incident]:
     """Fetch incidents whose Sentinel status is New or Active."""
     incidents: list[Incident] = []
@@ -69,7 +80,7 @@ def list_active_incidents(client: SecurityInsights, config: SentinelConfig) -> l
             workspace_name=config.workspace_name,
         )
         for incident in pager:
-            properties = getattr(incident, "properties", None)
+            properties = get_incident_fields(incident)
             status = getattr(properties, "status", None)
             if _normalise_status(status) in {"new", "active"}:
                 incidents.append(incident)
@@ -87,8 +98,8 @@ def update_incident_status(
     status: IncidentStatus,
     classification: str | None = None,
     comment: str | None = None,
-) -> None:
-    """Update incident status and optional closure metadata.
+) -> bool:
+    """Return True only when the SDK update call completes without an exception.
 
     This function is deliberately narrow. It is intended to be called only by
     the explicit write path in ``auto_triage.py`` after the dry-run/write gate has
@@ -102,16 +113,30 @@ def update_incident_status(
         )
         if not current:
             logger.warning("Incident %s not found", incident.name)
-            return
+            return False
 
-        properties = getattr(current, "properties", None)
+        properties = get_incident_fields(current)
         if properties is None:
-            logger.warning("Incident %s has no properties and cannot be updated", incident.name)
-            return
+            logger.warning("Incident %s has no readable fields and cannot be updated", incident.name)
+            return False
+
+        # Model-facing labels differ from the Azure API's enum values.
+        classifications = {
+            "True Positive": "TruePositive",
+            "False Positive": "FalsePositive",
+            "Benign Positive": "BenignPositive",
+            "TruePositive": "TruePositive",
+            "FalsePositive": "FalsePositive",
+            "BenignPositive": "BenignPositive",
+            "Undetermined": "Undetermined",
+        }
+        if classification and classification != "Unspecified" and classification not in classifications:
+            logger.warning("Incident %s has an unsupported classification; update skipped", incident.name)
+            return False
 
         properties.status = status
-        if classification:
-            properties.classification = classification
+        if classification in classifications:
+            properties.classification = classifications[classification]
         if comment:
             properties.classification_comment = comment
 
@@ -127,5 +152,8 @@ def update_incident_status(
             status,
             classification,
         )
+        return True
     except Exception as exc:
-        logger.error("Error updating incident %s: %s", incident.name, exc)
+        # SDK exception messages can contain response bodies or sensitive data.
+        logger.error("Error updating incident %s (%s)", incident.name, type(exc).__name__)
+        return False

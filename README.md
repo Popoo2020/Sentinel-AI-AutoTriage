@@ -17,6 +17,22 @@ It retrieves active incidents, prepares a compact incident summary, redacts comm
 
 See [`docs/recruiter_summary.md`](docs/recruiter_summary.md) for a short role-oriented summary.
 
+### Inspect the implementation
+
+- [Workflow and write gates](src/auto_triage.py) → [behavior tests](tests/test_auto_triage.py)
+- [Azure SDK adapter](src/sentinel_client.py) → [real SDK model / mocked operation regressions](tests/test_sdk_integration.py)
+- [Pre-model redaction](src/redaction.py) → [provider-boundary tests](tests/test_llm_client.py)
+
+**Offline verification, 19 October 2026:** 48 tests passed locally on Python 3.12.14 with `azure-mgmt-securityinsight==1.0.0`. The adapter tests use actual SDK `Incident` objects and mocked SDK operations; they cover field access, closure classification values, unchanged status, successful/failed writes and truthful audit outcomes. Recommendation logs omit free-text model comments. No Azure workspace or live model was contacted. This is not evidence of production deployment, tenant permissions, service availability or live-model accuracy.
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q tests
+python -m src.benchmark
+```
+
+The SDK model contract is documented in [Microsoft's Incident reference](https://learn.microsoft.com/en-us/python/api/azure-mgmt-securityinsight/azure.mgmt.securityinsight.models.incident?view=azure-python). A completed SDK call is recorded as applied; an SDK exception is recorded as not confirmed/applied. A timeout can still leave remote state uncertain and requires reconciliation before retrying. Durable per-incident approvals, authenticated approvers and live integration validation remain future work.
+
 This project is especially relevant for:
 
 - AI Security Engineer,

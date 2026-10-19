@@ -31,6 +31,7 @@ from .models import IncidentSummary
 from .recommendation_policy import evaluate_write_recommendation
 from .sentinel_client import (
     SentinelConfig,
+    get_incident_fields,
     get_sentinel_client,
     list_active_incidents,
     update_incident_status,
@@ -114,14 +115,14 @@ def _status_text(status: object) -> str:
 
 def build_summary(incident: object) -> IncidentSummary:
     """Convert a Sentinel SDK incident into the compact LLM-facing summary."""
-    properties = getattr(incident, "properties", None)
+    properties = get_incident_fields(incident)
     severity = getattr(properties, "severity", None)
     status = getattr(properties, "status", None)
     severity_label = getattr(severity, "name", None) or str(severity or "Unknown")
     status_label = getattr(status, "name", None) or str(status or "Unknown")
 
     return IncidentSummary(
-        id=str(getattr(incident, "name", "unknown-incident")),
+        id=str(getattr(incident, "name", None) or "unknown-incident"),
         title=getattr(properties, "title", None) or "(no title)",
         description=getattr(properties, "description", None) or "(no description)",
         severity=severity_label,
@@ -187,7 +188,7 @@ def process_incident(
     summary = build_summary(incident)
     logger.info("Processing incident %s", summary.id)
 
-    properties = getattr(incident, "properties", None)
+    properties = get_incident_fields(incident)
     current_status = getattr(properties, "status", None)
 
     result = llm_client.analyse_incident(summary.title, summary.description)
@@ -203,11 +204,10 @@ def process_incident(
     )
 
     logger.info(
-        "Recommendation for incident %s: status=%s classification=%s comment=%s",
+        "Recommendation for incident %s: status=%s classification=%s",
         summary.id,
         recommended_status,
         classification,
-        comment,
     )
 
     if _status_text(current_status) == _status_text(status_enum):
@@ -297,7 +297,7 @@ def process_incident(
         )
         return False
 
-    update_incident_status(
+    applied_update = update_incident_status(
         sentinel_client,
         config,
         incident,
@@ -316,9 +316,9 @@ def process_incident(
         approval_required=approval.required,
         approval_status=approval.status,
         approved_by=approval.approved_by,
-        applied_update=True,
+        applied_update=applied_update,
     )
-    return True
+    return applied_update
 
 
 def run_triage() -> None:
